@@ -11,7 +11,9 @@ this source tree.
 Copyright (c) 2019, Zhongqi Miao
 All rights reserved.
 """
-
+import torch
+import torch_xla
+import torch_xla.core.xla_model as xm
 import os
 import argparse
 import pprint
@@ -20,6 +22,8 @@ from run_networks import model
 import warnings
 import yaml
 from utils import source_import, get_value
+
+device = xm.xla_device()
 
 
 data_root = {'ImageNet': './dataset/ImageNet',
@@ -74,7 +78,7 @@ def update(config, args):
 # ============================================================================
 # LOAD CONFIGURATIONS
 with open(args.cfg) as f:
-    config = yaml.load(f)
+    config = yaml.load(f, Loader=yaml.Loader)
 config = update(config, args)
 
 test_mode = args.test
@@ -119,7 +123,7 @@ if not test_mode:
                 num_classes=training_opt['num_classes'],
                 init_pow=sampler_defs.get('init_pow', 0.0),
                 freq_path=sampler_defs.get('freq_path', None)
-            ).cuda()
+            ).to(device)
             sampler_dic = {
                 'batch_sampler': True,
                 'sampler': source_import(sampler_defs['def_file']).get_sampler(),

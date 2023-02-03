@@ -13,6 +13,8 @@ All rights reserved.
 """
 
 import torch
+import torch_xla
+import torch_xla.core.xla_model as xm
 import math
 import torch.nn as nn
 from torch.nn.parameter import Parameter
@@ -26,9 +28,9 @@ class CosNorm_Classifier(nn.Module):
         self.out_dims = out_dims
         self.scale = scale
         self.margin = margin
-        self.weight = Parameter(torch.Tensor(out_dims, in_dims).cuda())
+        self.weight = Parameter(torch.Tensor(out_dims, in_dims).to(device))
         self.reset_parameters() 
-
+        self.device = xm.xla_device()
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.weight.size(1))
         self.weight.data.uniform_(-stdv, stdv)

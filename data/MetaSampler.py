@@ -1,5 +1,7 @@
 from torch.utils.data.sampler import Sampler
 import torch
+import torch_xla
+import torch_xla.core.xla_model as xm
 import torch.nn as nn
 from torch.nn.functional import gumbel_softmax
 from queue import Queue
@@ -20,7 +22,7 @@ class SampleLearner(nn.Module):
         self.num_classes = num_classes
         self.init_pow = init_pow
         self.freq_path = freq_path
-
+        self.device = xm.xla_device()
         self.fc = nn.Sequential(
             nn.Linear(num_classes, 1, bias=False),
             nn.Sigmoid()
@@ -31,7 +33,7 @@ class SampleLearner(nn.Module):
 
     def init_learner(self, img_num_per_cls):
         self.sample_per_class = torch.tensor(img_num_per_cls).float()
-        self.sample_per_class = (self.sample_per_class / self.sample_per_class.sum()).cuda()
+        self.sample_per_class = (self.sample_per_class / self.sample_per_class.sum()).to(device)
         self.fc.apply(self.init_weights_sampler)
 
     def init_weights_sampler(self, m):
@@ -83,7 +85,7 @@ class MetaSampler(Sampler):
             targets.append(label)
 
         targets = torch.tensor(targets)
-        self.targets_onehot = nn.functional.one_hot(targets, num_classes).float().cuda()
+        self.targets_onehot = nn.functional.one_hot(targets, num_classes).float().to(device)
         self.meta_learner.init_learner(data_source.img_num_per_cls)
 
     def __iter__(self):

@@ -16,6 +16,9 @@ import os
 import copy
 import pickle
 import torch
+import torch_xla
+import torch_xla.core.xla_model as xm
+import torch_xla.debug.metrics as met
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
@@ -41,7 +44,8 @@ class model ():
             self.learner = learner
             self.meta_data = iter(data['meta'])
         
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        # self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        self.device = xm.xla_device()
         self.config = config
         self.training_opt = self.config['training_opt']
         self.memory = self.config['memory']
@@ -128,9 +132,9 @@ class model ():
             self.networks[key] = source_import(def_file).create_model(**model_args)
             if 'KNNClassifier' in type(self.networks[key]).__name__:
                 # Put the KNN classifier on one single GPU
-                self.networks[key] = self.networks[key].cuda()
+                self.networks[key] = self.networks[key].to(self.device)
             else:
-                self.networks[key] = nn.DataParallel(self.networks[key]).cuda()
+                self.networks[key] = nn.DataParallel(self.networks[key]).to(self.device)
 
             if 'fix' in val and val['fix']:
                 print('Freezing feature weights except for self attention weights (if exist).')
@@ -161,7 +165,7 @@ class model ():
             def_file = val['def_file']
             loss_args = list(val['loss_params'].values())
 
-            self.criterions[key] = source_import(def_file).create_loss(*loss_args).cuda()
+            self.criterions[key] = source_import(def_file).create_loss(*loss_args).to(self.device)
             self.criterion_weights[key] = val['weight']
           
             if val['optim_params']:
@@ -276,8 +280,8 @@ class model ():
 
             # use the surrogate model to update sample rate
             val_inputs, val_targets, _ = next(self.meta_data)
-            val_inputs = val_inputs.cuda()
-            val_targets = val_targets.cuda()
+            val_inputs = val_inputs.to(self.device)
+            val_targets = val_targets.to(self.device)
             features, _ = self.networks['feat_model'](val_inputs)
             val_outputs, _ = fmodel(features.detach())
             val_loss = F.cross_entropy(val_outputs, val_targets, reduction='mean')
@@ -321,7 +325,7 @@ class model ():
             for model in self.networks.values():
                 model.train()
 
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
             
             # Set model modes and set scheduler
             # In training, step optimizer scheduler and set model to train() 
@@ -339,7 +343,7 @@ class model ():
                     break
                 if self.do_shuffle:
                     inputs, labels = self.shuffle_batch(inputs, labels)
-                inputs, labels = inputs.cuda(), labels.cuda()
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
 
                 # If on training phase, enable gradients
                 with torch.set_grad_enabled(True):
@@ -388,7 +392,7 @@ class model ():
                             'CE': minibatch_loss_perf,
                             'feat': minibatch_loss_feat
                         }
-
+                        print(met.metrics_report())
                         self.logger.log_loss(loss_info)
 
                 # Update priority weights if using PrioritizedSampler
@@ -439,6 +443,7 @@ class model ():
             
             print('===> Saving checkpoint')
             self.save_latest(epoch)
+            
 
         print()
         print('Training Complete.')
@@ -523,8 +528,8 @@ class model ():
         for model in self.networks.values():
             model.eval()
 
-        self.total_logits = torch.empty((0, self.training_opt['num_classes'])).cuda()
-        self.total_labels = torch.empty(0, dtype=torch.long).cuda()
+        self.total_logits = torch.empty((0, self.training_opt['num_classes'])).to(self.device)
+        self.total_labels = torch.empty(0, dtype=torch.long).to(self.device)
         self.total_paths = np.empty(0)
 
         get_feat_only = save_feat
@@ -532,7 +537,7 @@ class model ():
         featmaps_all = []
         # Iterate over dataset
         for inputs, labels, paths in tqdm(self.data[phase]):
-            inputs, labels = inputs.cuda(), labels.cuda()
+            inputs, labels = inputs.to(self.device), labels.to(self.device)
 
             # If on training phase, enable gradients
             with torch.set_grad_enabled(False):
@@ -639,7 +644,7 @@ class model ():
     def centroids_cal(self, data, save_all=False):
 
         centroids = torch.zeros(self.training_opt['num_classes'],
-                                   self.training_opt['feature_dim']).cuda()
+                                   self.training_opt['feature_dim']).to(self.device)
 
         print('Calculating centroids.')
 
@@ -652,7 +657,7 @@ class model ():
         # Calculate initial centroids only on training data.
         with torch.set_grad_enabled(False):
             for inputs, labels, idxs in tqdm(data):
-                inputs, labels = inputs.cuda(), labels.cuda()
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
 
                 # Calculate Features of each training data
                 self.batch_forward(inputs, feature_ext=True)
@@ -674,7 +679,7 @@ class model ():
                              'idxs': np.concatenate(idxs_all)},
                             f)
         # Average summed features with class count
-        centroids /= torch.tensor(class_count(data)).float().unsqueeze(1).cuda()
+        centroids /= torch.tensor(class_count(data)).float().unsqueeze(1).to(self.device)
 
         return centroids
 
@@ -693,7 +698,7 @@ class model ():
         # Calculate initial centroids only on training data.
         with torch.set_grad_enabled(False):
             for inputs, labels, idxs in tqdm(self.data[datakey]):
-                inputs, labels = inputs.cuda(), labels.cuda()
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
 
                 # Calculate Features of each training data
                 self.batch_forward(inputs, feature_ext=True)

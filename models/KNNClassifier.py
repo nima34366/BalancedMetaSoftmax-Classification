@@ -7,6 +7,8 @@ LICENSE file in the root directory of this source tree.
 
 
 import torch
+import torch_xla
+import torch_xla.core.xla_model as xm
 import torch.nn as nn
 import numpy as np
 import pickle
@@ -24,7 +26,7 @@ class KNNClassifier(nn.Module):
         self.feat_type = feat_type
         self.dist_type = dist_type
         self.initialized = False
-    
+        self.device = xm.xla_device()
     def update(self, cfeats):
         mean = cfeats['mean']
         centroids = cfeats['{}cs'.format(self.feat_type)]
@@ -34,8 +36,8 @@ class KNNClassifier(nn.Module):
         self.feat_mean.copy_(mean)
         self.centroids.copy_(centroids)
         if torch.cuda.is_available():
-            self.feat_mean = self.feat_mean.cuda()
-            self.centroids = self.centroids.cuda()
+            self.feat_mean = self.feat_mean.to(device)
+            self.centroids = self.centroids.to(device)
         self.initialized = True
 
     def forward(self, inputs, *args):
