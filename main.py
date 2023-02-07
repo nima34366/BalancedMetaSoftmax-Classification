@@ -14,6 +14,7 @@ All rights reserved.
 import torch
 import torch_xla
 import torch_xla.core.xla_model as xm
+import torch_xla.distributed.xla_multiprocessing as xmp
 import os
 import argparse
 import pprint
@@ -23,7 +24,7 @@ import warnings
 import yaml
 from utils import source_import, get_value
 
-device = xm.xla_device()
+
 
 
 data_root = {'ImageNet': './dataset/ImageNet',
@@ -75,6 +76,8 @@ def update(config, args):
     
     return config
 
+
+
 # ============================================================================
 # LOAD CONFIGURATIONS
 with open(args.cfg) as f:
@@ -102,109 +105,114 @@ def split2phase(split):
     else:
         return split
 
-if not test_mode:
+def distrib_train(rank, flags):
+    device = xm.xla_device()
+    torch.set_default_tensor_type('torch.FloatTensor')
+    if not test_mode:
 
-    sampler_defs = training_opt['sampler']
-    if sampler_defs:
-        if sampler_defs['type'] == 'ClassAwareSampler':
-            sampler_dic = {
-                'sampler': source_import(sampler_defs['def_file']).get_sampler(),
-                'params': {'num_samples_cls': sampler_defs['num_samples_cls']}
-            }
-        elif sampler_defs['type'] in ['MixedPrioritizedSampler',
-                                      'ClassPrioritySampler']:
-            sampler_dic = {
-                'sampler': source_import(sampler_defs['def_file']).get_sampler(),
-                'params': {k: v for k, v in sampler_defs.items() \
-                           if k not in ['type', 'def_file']}
-            }
-        elif sampler_defs['type'] == 'MetaSampler':  # Add option for Meta Sampler
-            learner = source_import(sampler_defs['def_file']).get_learner()(
-                num_classes=training_opt['num_classes'],
-                init_pow=sampler_defs.get('init_pow', 0.0),
-                freq_path=sampler_defs.get('freq_path', None)
-            ).to(device)
-            sampler_dic = {
-                'batch_sampler': True,
-                'sampler': source_import(sampler_defs['def_file']).get_sampler(),
-                'params': {'meta_learner': learner, 'batch_size': training_opt['batch_size']}
-            }
+        sampler_defs = training_opt['sampler']
+        if sampler_defs:
+            if sampler_defs['type'] == 'ClassAwareSampler':
+                sampler_dic = {
+                    'sampler': source_import(sampler_defs['def_file']).get_sampler(),
+                    'params': {'num_samples_cls': sampler_defs['num_samples_cls']}
+                }
+            elif sampler_defs['type'] in ['MixedPrioritizedSampler',
+                                        'ClassPrioritySampler']:
+                sampler_dic = {
+                    'sampler': source_import(sampler_defs['def_file']).get_sampler(),
+                    'params': {k: v for k, v in sampler_defs.items() \
+                            if k not in ['type', 'def_file']}
+                }
+            elif sampler_defs['type'] == 'MetaSampler':  # Add option for Meta Sampler
+                learner = source_import(sampler_defs['def_file']).get_learner()(
+                    num_classes=training_opt['num_classes'],
+                    init_pow=sampler_defs.get('init_pow', 0.0),
+                    freq_path=sampler_defs.get('freq_path', None)
+                ).to(device)
+                sampler_dic = {
+                    'batch_sampler': True,
+                    'sampler': source_import(sampler_defs['def_file']).get_sampler(),
+                    'params': {'meta_learner': learner, 'batch_size': training_opt['batch_size']}
+                }
+        else:
+            sampler_dic = None
+
+        splits = ['train', 'train_plain', 'val']
+        if dataset not in ['iNaturalist18', 'ImageNet']:
+            splits.append('test')
+        data = {x: dataloader.load_data(data_root=data_root[dataset.rstrip('_LT')],
+                                        dataset=dataset, phase=split2phase(x), 
+                                        batch_size=training_opt['batch_size'],
+                                        sampler_dic=sampler_dic,
+                                        num_workers=training_opt['num_workers'],
+                                        cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None)
+                for x in splits}
+
+        if sampler_defs and sampler_defs['type'] == 'MetaSampler':   # todo: use meta-sampler
+            cbs_file = './data/ClassAwareSampler.py'
+            cbs_sampler_dic = {
+                    'sampler': source_import(cbs_file).get_sampler(),
+                    'params': {'is_infinite': True}
+                }
+            # use Class Balanced Sampler to create meta set
+            data['meta'] = dataloader.load_data(data_root=data_root[dataset.rstrip('_LT')],
+                                        dataset=dataset, phase='train' if 'CIFAR' in dataset else 'val',
+                                        batch_size=sampler_defs.get('meta_batch_size', training_opt['batch_size'], ),
+                                        sampler_dic=cbs_sampler_dic,
+                                        num_workers=training_opt['num_workers'],
+                                        cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None,
+                                        meta=True)
+            training_model = model(config, data, test=False, meta_sample=True, learner=learner)
+        else:
+            training_model = model(config, data, test=False)
+
+        training_model.train()
+
     else:
-        sampler_dic = None
 
-    splits = ['train', 'train_plain', 'val']
-    if dataset not in ['iNaturalist18', 'ImageNet']:
-        splits.append('test')
-    data = {x: dataloader.load_data(data_root=data_root[dataset.rstrip('_LT')],
-                                    dataset=dataset, phase=split2phase(x), 
-                                    batch_size=training_opt['batch_size'],
-                                    sampler_dic=sampler_dic,
-                                    num_workers=training_opt['num_workers'],
-                                    cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None)
-            for x in splits}
+        warnings.filterwarnings("ignore", "(Possibly )?corrupt EXIF data",
+                                UserWarning)
 
-    if sampler_defs and sampler_defs['type'] == 'MetaSampler':   # todo: use meta-sampler
-        cbs_file = './data/ClassAwareSampler.py'
-        cbs_sampler_dic = {
-                'sampler': source_import(cbs_file).get_sampler(),
-                'params': {'is_infinite': True}
-            }
-        # use Class Balanced Sampler to create meta set
-        data['meta'] = dataloader.load_data(data_root=data_root[dataset.rstrip('_LT')],
-                                    dataset=dataset, phase='train' if 'CIFAR' in dataset else 'val',
-                                    batch_size=sampler_defs.get('meta_batch_size', training_opt['batch_size'], ),
-                                    sampler_dic=cbs_sampler_dic,
-                                    num_workers=training_opt['num_workers'],
-                                    cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None,
-                                    meta=True)
-        training_model = model(config, data, test=False, meta_sample=True, learner=learner)
-    else:
-        training_model = model(config, data, test=False)
+        print('Under testing phase, we load training data simply to calculate \
+            training data number for each class.')
 
-    training_model.train()
+        if 'iNaturalist' in training_opt['dataset']:
+            splits = ['train', 'val']
+            test_split = 'val'
+        else:
+            splits = ['train', 'val', 'test']
+            test_split = 'test'
+        if 'ImageNet' == training_opt['dataset']:
+            splits = ['train', 'val']
+            test_split = 'val'
+        if args.knn or True:
+            splits.append('train_plain')
 
-else:
-
-    warnings.filterwarnings("ignore", "(Possibly )?corrupt EXIF data",
-                            UserWarning)
-
-    print('Under testing phase, we load training data simply to calculate \
-           training data number for each class.')
-
-    if 'iNaturalist' in training_opt['dataset']:
-        splits = ['train', 'val']
-        test_split = 'val'
-    else:
-        splits = ['train', 'val', 'test']
-        test_split = 'test'
-    if 'ImageNet' == training_opt['dataset']:
-        splits = ['train', 'val']
-        test_split = 'val'
-    if args.knn or True:
-        splits.append('train_plain')
-
-    data = {x: dataloader.load_data(data_root=data_root[dataset.rstrip('_LT')],
-                                    dataset=dataset, phase=x,
-                                    batch_size=training_opt['batch_size'],
-                                    sampler_dic=None, 
-                                    test_open=test_open,
-                                    num_workers=training_opt['num_workers'],
-                                    shuffle=False,
-                                    cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None)
-            for x in splits}
-    
-    training_model = model(config, data, test=True)
-    # training_model.load_model()
-    training_model.load_model(args.model_dir)
-    if args.save_feat in ['train_plain', 'val', 'test']:
-        saveit = True
-        test_split = args.save_feat
-    else:
-        saveit = False
-    
-    training_model.eval(phase=test_split, openset=test_open, save_feat=saveit)
-    
-    if output_logits:
-        training_model.output_logits(openset=test_open)
+        data = {x: dataloader.load_data(data_root=data_root[dataset.rstrip('_LT')],
+                                        dataset=dataset, phase=x,
+                                        batch_size=training_opt['batch_size'],
+                                        sampler_dic=None, 
+                                        test_open=test_open,
+                                        num_workers=training_opt['num_workers'],
+                                        shuffle=False,
+                                        cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None)
+                for x in splits}
         
+        training_model = model(config, data, test=True)
+        # training_model.load_model()
+        training_model.load_model(args.model_dir)
+        if args.save_feat in ['train_plain', 'val', 'test']:
+            saveit = True
+            test_split = args.save_feat
+        else:
+            saveit = False
+        
+        training_model.eval(phase=test_split, openset=test_open, save_feat=saveit)
+        
+        if output_logits:
+            training_model.output_logits(openset=test_open)
+        
+xmp.spawn(distrib_train, args=({},), nprocs=8, start_method='fork')
+
 print('ALL COMPLETED.')

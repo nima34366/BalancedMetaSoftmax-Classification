@@ -19,6 +19,7 @@ import torch
 import torch_xla
 import torch_xla.core.xla_model as xm
 import torch_xla.debug.metrics as met
+import torch_xla.distributed.parallel_loader as pl
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
@@ -76,13 +77,13 @@ class model ():
             # If using steps for training, we need to calculate training steps 
             # for each epoch based on actual number of training data instead of 
             # oversampled data number 
-            print('Using steps for training.')
+            xm.master_print('Using steps for training.')
             self.training_data_num = len(self.data['train'].dataset)
             self.epoch_steps = int(self.training_data_num  \
                                    / self.training_opt['batch_size'])
 
             # Initialize model optimizer and scheduler
-            print('Initializing model optimizer.')
+            xm.master_print('Initializing model optimizer.')
             self.scheduler_params = self.training_opt['scheduler_params']
             self.model_optimizer, \
             self.model_optimizer_scheduler = self.init_optimizers(self.model_optim_params_list)
@@ -101,7 +102,7 @@ class model ():
                 self.load_model()
                 if not self.networks['classifier'].initialized:
                     cfeats = self.get_knncentroids()
-                    print('===> Saving features to %s' % 
+                    xm.master_print('===> Saving features to %s' % 
                           os.path.join(self.training_opt['log_dir'], 'cfeats.pkl'))
                     with open(os.path.join(self.training_opt['log_dir'], 'cfeats.pkl'), 'wb') as f:
                         pickle.dump(cfeats, f)
@@ -118,7 +119,7 @@ class model ():
             self.optimizer_meta = torch.optim.Adam(self.learner.parameters(),
                                                    lr=self.training_opt['sampler'].get('lr', 0.01))
 
-        print("Using", torch.cuda.device_count(), "GPUs.")
+        xm.master_print("Using", torch.cuda.device_count(), "GPUs.")
         
         for key, val in networks_defs.items():
 
@@ -137,12 +138,12 @@ class model ():
                 self.networks[key] = nn.DataParallel(self.networks[key]).to(self.device)
 
             if 'fix' in val and val['fix']:
-                print('Freezing feature weights except for self attention weights (if exist).')
+                xm.master_print('Freezing feature weights except for self attention weights (if exist).')
                 for param_name, param in self.networks[key].named_parameters():
                     # Freeze all parameters except self attention parameters
                     if 'selfatt' not in param_name and 'fc' not in param_name:
                         param.requires_grad = False
-                    # print('  | ', param_name, param.requires_grad)
+                    # xm.master_print('  | ', param_name, param.requires_grad)
 
             if self.meta_sample and key!='classifier':
                 # avoid adding classifier parameters to the optimizer,
@@ -169,7 +170,7 @@ class model ():
             self.criterion_weights[key] = val['weight']
           
             if val['optim_params']:
-                print('Initializing criterion optimizer.')
+                xm.master_print('Initializing criterion optimizer.')
                 optim_params = val['optim_params']
                 optim_params = [{'params': self.criterions[key].parameters(),
                                 'lr': optim_params['lr'],
@@ -184,11 +185,11 @@ class model ():
     def init_optimizers(self, optim_params):
         optimizer = optim.SGD(optim_params)
         if self.config['coslr']:
-            print("===> Using coslr eta_min={}".format(self.config['endlr']))
+            xm.master_print("===> Using coslr eta_min={}".format(self.config['endlr']))
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
                 optimizer, self.training_opt['num_epochs'], eta_min=self.config['endlr'])
         elif self.config['coslrwarmup']:
-            print("===> Using coslrwarmup eta_min={}, warmup_epochs={}".format(
+            xm.master_print("===> Using coslrwarmup eta_min={}, warmup_epochs={}".format(
                 self.config['endlr'],self.config['warmup_epochs']))
             scheduler = CosineAnnealingLRWarmup(
                 optimizer=optimizer,
@@ -239,7 +240,9 @@ class model ():
         # Back-propagation from loss outputs
         self.loss.backward()
         # Step optimizers
-        self.model_optimizer.step()
+        # self.model_optimizer.step()
+        xm.optimizer_step(self.model_optimizer)
+        xm.mark_step()
         if self.criterion_optimizer:
             self.criterion_optimizer.step()
 
@@ -322,6 +325,8 @@ class model ():
 
         # Loop over epochs
         for epoch in range(1, end_epoch + 1):
+            # self.data['train'].sampler.set_epoch(epoch)
+            para_loader = pl.ParallelLoader(self.data['train'], [self.device])
             for model in self.networks.values():
                 model.train()
 
@@ -337,7 +342,7 @@ class model ():
             total_preds = []
             total_labels = []
 
-            for step, (inputs, labels, indexes) in enumerate(self.data['train']):
+            for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device)):
                 # Break when step equal to epoch step
                 if step == self.epoch_steps:
                     break
@@ -392,7 +397,7 @@ class model ():
                             'CE': minibatch_loss_perf,
                             'feat': minibatch_loss_feat
                         }
-                        print(met.metrics_report())
+                        # xm.master_print(met.metrics_report())
                         self.logger.log_loss(loss_info)
 
                 # Update priority weights if using PrioritizedSampler
@@ -441,12 +446,12 @@ class model ():
                 best_model_weights['feat_model'] = copy.deepcopy(self.networks['feat_model'].state_dict())
                 best_model_weights['classifier'] = copy.deepcopy(self.networks['classifier'].state_dict())
             
-            print('===> Saving checkpoint')
+            xm.master_print('===> Saving checkpoint')
             self.save_latest(epoch)
             
 
-        print()
-        print('Training Complete.')
+        xm.master_print()
+        xm.master_print('Training Complete.')
 
         print_str = ['Best validation accuracy is %.3f at epoch %d' % (best_acc, best_epoch)]
         print_write(print_str, self.log_file)
@@ -456,7 +461,7 @@ class model ():
         # Test on the test set
         self.reset_model(best_model_weights)
         self.eval('test' if 'test' in self.data else 'val')
-        print('Done')
+        xm.master_print('Done')
     
     def eval_with_preds(self, preds, labels):
         # Count the number of examples
@@ -519,10 +524,10 @@ class model ():
         time.sleep(0.25)
 
         if openset:
-            print('Under openset test mode. Open threshold is %.1f' 
+            xm.master_print('Under openset test mode. Open threshold is %.1f' 
                   % self.training_opt['open_threshold'])
  
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
 
         # In validation or testing mode, set model to eval() and initialize running loss/correct
         for model in self.networks.values():
@@ -536,7 +541,9 @@ class model ():
         feats_all, labels_all, idxs_all, logits_all = [], [], [], []
         featmaps_all = []
         # Iterate over dataset
-        for inputs, labels, paths in tqdm(self.data[phase]):
+        para_loader = pl.ParallelLoader(self.data[phase], [self.device])
+
+        for inputs, labels, paths in tqdm(para_loader.per_device_loader(self.device)):
             inputs, labels = inputs.to(self.device), labels.to(self.device)
 
             # If on training phase, enable gradients
@@ -549,7 +556,7 @@ class model ():
                 if not get_feat_only:
                     self.total_logits = torch.cat((self.total_logits, self.logits))
                     self.total_labels = torch.cat((self.total_labels, labels))
-                    self.total_paths = np.concatenate((self.total_paths, paths))
+                    self.total_paths = np.concatenate((self.total_paths, paths.cpu().numpy()))
 
                 if get_feat_only:
                     logits_all.append(self.logits.cpu().numpy())
@@ -567,7 +574,7 @@ class model ():
                 name = 'val{}_all.pkl'.format(typ)
 
             fname = os.path.join(self.training_opt['log_dir'], name)
-            print('===> Saving feats to ' + fname)
+            xm.master_print('===> Saving feats to ' + fname)
             with open(fname, 'wb') as f:
                 pickle.dump({
                              'feats': np.concatenate(feats_all),
@@ -582,7 +589,7 @@ class model ():
             preds[probs < self.training_opt['open_threshold']] = -1
             self.openset_acc = mic_acc_cal(preds[self.total_labels == -1],
                                             self.total_labels[self.total_labels == -1])
-            print('\n\nOpenset Accuracy: %.3f' % self.openset_acc)
+            xm.master_print('\n\nOpenset Accuracy: %.3f' % self.openset_acc)
 
         # Calculate the overall accuracy and F measurement
         self.eval_acc_mic_top1= mic_acc_cal(preds[self.total_labels != -1],
@@ -633,8 +640,8 @@ class model ():
                 print_write(print_str, self.log_file)
                 print_write(acc_str, self.log_file)
             else:
-                print(*print_str)
-                print(*acc_str)
+                xm.master_print(*print_str)
+                xm.master_print(*acc_str)
         
         if phase == 'test':
             with open(os.path.join(self.training_opt['log_dir'], 'cls_accs.pkl'), 'wb') as f:
@@ -646,7 +653,7 @@ class model ():
         centroids = torch.zeros(self.training_opt['num_classes'],
                                    self.training_opt['feature_dim']).to(self.device)
 
-        print('Calculating centroids.')
+        xm.master_print('Calculating centroids.')
 
         torch.cuda.empty_cache()
         for model in self.networks.values():
@@ -687,7 +694,7 @@ class model ():
         datakey = 'train_plain'
         assert datakey in self.data
 
-        print('===> Calculating KNN centroids.')
+        xm.master_print('===> Calculating KNN centroids.')
 
         torch.cuda.empty_cache()
         for model in self.networks.values():
@@ -748,8 +755,8 @@ class model ():
         if not model_dir.endswith('.pth'):
             model_dir = os.path.join(model_dir, 'final_model_checkpoint.pth')
         
-        print('Validation on the best model.')
-        print('Loading model from %s' % (model_dir))
+        xm.master_print('Validation on the best model.')
+        xm.master_print('Loading model from %s' % (model_dir))
         
         checkpoint = torch.load(model_dir)          
         model_state = checkpoint['state_dict_best']
@@ -761,7 +768,7 @@ class model ():
             if not self.test_mode and \
                 'DotProductClassifier' in self.config['networks'][key]['def_file']:
                 # Skip classifier initialization 
-                print('Skiping classifier initialization')
+                xm.master_print('Skiping classifier initialization')
                 continue
             weights = model_state[key]
             weights = {k: weights[k] for k in weights if k in model.state_dict()}
@@ -781,7 +788,7 @@ class model ():
 
         model_dir = os.path.join(self.training_opt['log_dir'], 
                                  'latest_model_checkpoint.pth')
-        torch.save(model_states, model_dir)
+        xm.save(model_states, model_dir)
         
     def save_model(self, epoch, best_epoch, best_model_weights, best_acc, centroids=None):
         
@@ -794,12 +801,12 @@ class model ():
         model_dir = os.path.join(self.training_opt['log_dir'], 
                                  'final_model_checkpoint.pth')
 
-        torch.save(model_states, model_dir)
+        xm.save(model_states, model_dir)
             
     def output_logits(self, openset=False):
         filename = os.path.join(self.training_opt['log_dir'], 
                                 'logits_%s'%('open' if openset else 'close'))
-        print("Saving total logits to: %s.npz" % filename)
+        xm.master_print("Saving total logits to: %s.npz" % filename)
         np.savez(filename, 
                  logits=self.total_logits.detach().cpu().numpy(), 
                  labels=self.total_labels.detach().cpu().numpy(),

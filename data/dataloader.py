@@ -13,11 +13,17 @@ All rights reserved.
 """
 
 import json
-from torch.utils.data import Dataset, DataLoader, ConcatDataset
+import torch
+import torch_xla
+import torch_xla.core.xla_model as xm
+from torch.utils.data import Dataset, DataLoader, ConcatDataset, Sampler
 from torchvision import transforms
 import os
 from PIL import Image
 from data.ImbalanceCIFAR import IMBALANCECIFAR10, IMBALANCECIFAR100
+from torch.utils.data import DistributedSampler
+from typing import Optional, Iterator, Union
+
 
 
 # Image statistics
@@ -61,6 +67,83 @@ def get_data_transform(split, rgb_mean, rbg_std, key='default'):
         ])
     }
     return data_transforms[split]
+
+class DatasetFromSampler(Dataset):
+    """Dataset to create indexes from `Sampler`.
+    Args:
+        sampler: PyTorch sampler
+    """
+
+    def __init__(self, sampler: Sampler):
+        """Initialisation for DatasetFromSampler."""
+        self.sampler = sampler
+        self.sampler_list = None
+
+    def __getitem__(self, index: int):
+        """Gets element of the dataset.
+        Args:
+            index: index of the element in the dataset
+        Returns:
+            Single element by index
+        """
+        if self.sampler_list is None:
+            self.sampler_list = list(self.sampler)
+        return self.sampler_list[index]
+
+    def __len__(self) -> int:
+        """
+        Returns:
+            int: length of the dataset
+        """
+        return len(self.sampler)
+
+class DistributedSamplerWrapper(DistributedSampler):
+    """
+    Wrapper over `Sampler` for distributed training.
+    Allows you to use any sampler in distributed mode.
+    It is especially useful in conjunction with
+    `torch.nn.parallel.DistributedDataParallel`. In such case, each
+    process can pass a DistributedSamplerWrapper instance as a DataLoader
+    sampler, and load a subset of subsampled data of the original dataset
+    that is exclusive to it.
+    .. note::
+        Sampler is assumed to be of constant size.
+    """
+
+    def __init__(
+        self,
+        sampler,
+        num_replicas: Optional[int] = None,
+        rank: Optional[int] = None,
+        shuffle: bool = True,
+    ):
+        """
+        Args:
+            sampler: Sampler used for subsampling
+            num_replicas (int, optional): Number of processes participating in
+                distributed training
+            rank (int, optional): Rank of the current process
+                within ``num_replicas``
+            shuffle (bool, optional): If true (default),
+                sampler will shuffle the indices
+        """
+        super(DistributedSamplerWrapper, self).__init__(
+            DatasetFromSampler(sampler),
+            num_replicas=num_replicas,
+            rank=rank,
+            shuffle=shuffle,
+        )
+        self.sampler = sampler
+
+    def __iter__(self) -> Iterator[int]:
+        """Iterate over sampler.
+        Returns:
+            python iterator
+        """
+        self.dataset = DatasetFromSampler(self.sampler)
+        indexes_of_indexes = super().__iter__()
+        subsampler_indexes = self.dataset
+        return iter(itemgetter(*indexes_of_indexes)(subsampler_indexes))
 
 
 # Dataset
@@ -148,7 +231,7 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
     if sampler_dic and phase == 'train' and sampler_dic.get('batch_sampler', False):
         print('Using sampler: ', sampler_dic['sampler'])
         return DataLoader(dataset=set_,
-                           batch_sampler=sampler_dic['sampler'](set_, **sampler_dic['params']),
+                           batch_sampler=DistributedSamplerWrapper(sampler_dic['sampler'](set_, **sampler_dic['params']), xm.xrt_world_size(), xm.get_ordinal(), shuffle=False),
                            num_workers=num_workers)
 
     elif sampler_dic and (phase == 'train' or meta):
@@ -156,10 +239,11 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
         # print('Sample %s samples per-class.' % sampler_dic['num_samples_cls'])
         print('Sampler parameters: ', sampler_dic['params'])
         return DataLoader(dataset=set_, batch_size=batch_size, shuffle=False,
-                           sampler=sampler_dic['sampler'](set_, **sampler_dic['params']),
+                           sampler=DistributedSamplerWrapper(sampler_dic['sampler'](set_, **sampler_dic['params']), xm.xrt_world_size(), xm.get_ordinal(), shuffle=False),
                            num_workers=num_workers)
     else:
         print('No sampler.')
         print('Shuffle is %s.' % (shuffle))
-        return DataLoader(dataset=set_, batch_size=batch_size,
-                          shuffle=shuffle, num_workers=num_workers)
+        return DataLoader(dataset=set_, batch_size=batch_size, num_workers=num_workers, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
+
+

@@ -15,6 +15,8 @@ All rights reserved.
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+import torch_xla
+import torch_xla.core.xla_model as xm
 from sklearn.metrics import f1_score
 import torch.nn.functional as F
 import importlib
@@ -74,7 +76,7 @@ def batch_show(inp, title=None):
         plt.title(title)
 
 def print_write(print_str, log_file):
-    print(*print_str)
+    xm.master_print(*print_str)
     if log_file is None:
         return
     with open(log_file, 'a') as f:
