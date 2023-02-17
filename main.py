@@ -27,7 +27,7 @@ from utils import source_import, get_value
 
 
 
-data_root = {'ImageNet': './dataset/ImageNet',
+data_root = {'ImageNet': '/mnt/disks/persist/imagenet',
              'Places': './dataset/Places-LT',
              'iNaturalist18': '/checkpoint/bykang/iNaturalist18',
              'CIFAR10': './dataset/CIFAR10',

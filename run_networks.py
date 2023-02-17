@@ -446,8 +446,8 @@ class model ():
                 best_model_weights['feat_model'] = copy.deepcopy(self.networks['feat_model'].state_dict())
                 best_model_weights['classifier'] = copy.deepcopy(self.networks['classifier'].state_dict())
             
-            xm.master_print('===> Saving checkpoint')
-            self.save_latest(epoch)
+            # xm.master_print('===> Saving checkpoint')
+            # self.save_latest(epoch)
             
 
         xm.master_print()

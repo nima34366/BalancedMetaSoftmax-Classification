@@ -8,7 +8,7 @@ criterions:
 endlr: 0.0
 last: false
 memory: {centroids: false, init_centroids: false}
-model_dir: ./logs/ImageNet_LT/models/resnet10_uniform_e90
+model_dir: null
 networks:
   classifier:
     def_file: ./models/DotProductClassifier.py
