@@ -30,7 +30,11 @@ import time
 import numpy as np
 import warnings
 import pdb
+import time
+import gc
 import higher
+# import torch.profiler
+import torch_xla.debug.profiler as xp
 
 
 class model ():
@@ -307,6 +311,7 @@ class model ():
 
     def train(self):
         # When training the network
+        server = xp.start_server(9012)
         print_str = ['Phase: train']
         print_write(print_str, self.log_file)
         time.sleep(0.25)
@@ -326,125 +331,146 @@ class model ():
         # Loop over epochs
         for epoch in range(1, end_epoch + 1):
             # self.data['train'].sampler.set_epoch(epoch)
+            print(1)
             para_loader = pl.ParallelLoader(self.data['train'], [self.device])
+            print(2)
             for model in self.networks.values():
-                model.train()
+                model.to(self.device).train()
+            print(3)
 
             # torch.cuda.empty_cache()
-            
+            gc.collect()
             # Set model modes and set scheduler
             # In training, step optimizer scheduler and set model to train() 
             self.model_optimizer_scheduler.step()
+            print(5)
             if self.criterion_optimizer:
                 self.criterion_optimizer_scheduler.step()
-
+            print(6)
             # Iterate over dataset
             total_preds = []
             total_labels = []
-
-            for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device)):
+            print(8)
+            prof = torch.profiler.profile(
+                schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+                on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/wickramasinghenlssck/BalancedMetaSoftmax-Classification/logs/tens'),
+                record_shapes=True,
+                with_stack=True)
+            prof.start()
+            for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device),1):
                 # Break when step equal to epoch step
-                if step == self.epoch_steps:
-                    break
-                if self.do_shuffle:
-                    inputs, labels = self.shuffle_batch(inputs, labels)
-                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                with xp.StepTrace('train_loop', step_num=step):
+                    print(9)
+                    if step == self.epoch_steps:
+                        break
+                    if self.do_shuffle:
+                        inputs, labels = self.shuffle_batch(inputs, labels)
+                    inputs, labels = inputs.to(self.device), labels.to(self.device)
+                    print(10)
+                    # If on training phase, enable gradients
+                    with torch.set_grad_enabled(True):
+                        if self.meta_sample:
+                            # do inner loop
+                            self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
+                        print(11)
+                        # If training, forward with loss, and no top 5 accuracy calculation
+                        self.batch_forward(inputs, labels, 
+                                        centroids=self.memory['centroids'],
+                                        phase='train')
+                        print(12)
+                        self.batch_loss(labels)
+                        self.batch_backward()
+                        print(13)
+                        # Tracking predictions
+                        _, preds = torch.max(self.logits, 1)
+                        # total_preds.append(torch2numpy(preds))
+                        # total_labels.append(torch2numpy(labels))
+                        print(14)
+                        # Output minibatch training results
+                        if step % self.training_opt['display_step'] == 0:
 
-                # If on training phase, enable gradients
-                with torch.set_grad_enabled(True):
-                    if self.meta_sample:
-                        # do inner loop
-                        self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
-                        
-                    # If training, forward with loss, and no top 5 accuracy calculation
-                    self.batch_forward(inputs, labels, 
-                                       centroids=self.memory['centroids'],
-                                       phase='train')
-                    self.batch_loss(labels)
-                    self.batch_backward()
+                            minibatch_loss_feat = self.loss_feat.item() \
+                                if 'FeatureLoss' in self.criterions.keys() else None
+                            minibatch_loss_perf = self.loss_perf.item() \
+                                if 'PerformanceLoss' in self.criterions else None
+                            minibatch_loss_total = self.loss.item()
+                            minibatch_acc = mic_acc_cal(preds, labels)
 
-                    # Tracking predictions
-                    _, preds = torch.max(self.logits, 1)
-                    total_preds.append(torch2numpy(preds))
-                    total_labels.append(torch2numpy(labels))
+                            print_str = ['Epoch: [%d/%d]' 
+                                        % (epoch, self.training_opt['num_epochs']),
+                                        'Step: %5d' 
+                                        % (step),
+                                        'Minibatch_loss_feature: %.3f' 
+                                        % (minibatch_loss_feat) if minibatch_loss_feat else '',
+                                        'Minibatch_loss_performance: %.3f'
+                                        % (minibatch_loss_perf) if minibatch_loss_perf else '',
+                                        'Minibatch_accuracy_micro: %.3f'
+                                        % (minibatch_acc)]
+                            print_write(print_str, self.log_file)
 
-                    # Output minibatch training results
-                    if step % self.training_opt['display_step'] == 0:
+                            loss_info = {
+                                'Epoch': epoch,
+                                'Step': step,
+                                'Total': minibatch_loss_total,
+                                'CE': minibatch_loss_perf,
+                                'feat': minibatch_loss_feat
+                            }
 
-                        minibatch_loss_feat = self.loss_feat.item() \
-                            if 'FeatureLoss' in self.criterions.keys() else None
-                        minibatch_loss_perf = self.loss_perf.item() \
-                            if 'PerformanceLoss' in self.criterions else None
-                        minibatch_loss_total = self.loss.item()
-                        minibatch_acc = mic_acc_cal(preds, labels)
+                        del inputs,labels
+                        gc.collect()
+                        print(15)
+                            # xm.master_print(met.metrics_report())
+                            # self.logger.log_loss(loss_info)
 
-                        print_str = ['Epoch: [%d/%d]' 
-                                     % (epoch, self.training_opt['num_epochs']),
-                                     'Step: %5d' 
-                                     % (step),
-                                     'Minibatch_loss_feature: %.3f' 
-                                     % (minibatch_loss_feat) if minibatch_loss_feat else '',
-                                     'Minibatch_loss_performance: %.3f'
-                                     % (minibatch_loss_perf) if minibatch_loss_perf else '',
-                                     'Minibatch_accuracy_micro: %.3f'
-                                      % (minibatch_acc)]
-                        print_write(print_str, self.log_file)
-
-                        loss_info = {
-                            'Epoch': epoch,
-                            'Step': step,
-                            'Total': minibatch_loss_total,
-                            'CE': minibatch_loss_perf,
-                            'feat': minibatch_loss_feat
-                        }
-                        # xm.master_print(met.metrics_report())
-                        self.logger.log_loss(loss_info)
-
-                # Update priority weights if using PrioritizedSampler
-                # if self.training_opt['sampler'] and \
-                #    self.training_opt['sampler']['type'] == 'PrioritizedSampler':
-                if hasattr(self.data['train'].sampler, 'update_weights'):
-                    if hasattr(self.data['train'].sampler, 'ptype'):
-                        ptype = self.data['train'].sampler.ptype 
-                    else:
-                        ptype = 'score'
-                    ws = get_priority(ptype, self.logits.detach(), labels)
-                    # ws = logits2score(self.logits.detach(), labels)
-                    inlist = [indexes.cpu().numpy(), ws]
-                    if self.training_opt['sampler']['type'] == 'ClassPrioritySampler':
-                        inlist.append(labels.cpu().numpy())
-                    self.data['train'].sampler.update_weights(*inlist)
-                    # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
-
-            if hasattr(self.data['train'].sampler, 'get_weights'):
-                self.logger.log_ws(epoch, self.data['train'].sampler.get_weights())
-            if hasattr(self.data['train'].sampler, 'reset_weights'):
-                self.data['train'].sampler.reset_weights(epoch)
-
+                    # Update priority weights if using PrioritizedSampler
+                    # if self.training_opt['sampler'] and \
+                    #    self.training_opt['sampler']['type'] == 'PrioritizedSampler':
+                    # if hasattr(self.data['train'].sampler, 'update_weights'):
+                    #     if hasattr(self.data['train'].sampler, 'ptype'):
+                    #         ptype = self.data['train'].sampler.ptype 
+                    #     else:
+                    #         ptype = 'score'
+                    #     ws = get_priority(ptype, self.logits.detach(), labels)
+                    #     # ws = logits2score(self.logits.detach(), labels)
+                    #     inlist = [indexes.cpu().numpy(), ws]
+                    #     if self.training_opt['sampler']['type'] == 'ClassPrioritySampler':
+                    #         inlist.append(labels.cpu().numpy())
+                    #     self.data['train'].sampler.update_weights(*inlist)
+                        # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
+            prof.stop()
+            # if hasattr(self.data['train'].sampler, 'get_weights'):
+            #     self.logger.log_ws(epoch, self.data['train'].sampler.get_weights())
+            # if hasattr(self.data['train'].sampler, 'reset_weights'):
+            #     self.data['train'].sampler.reset_weights(epoch)
+            del para_loader, indexes
+            gc.collect()
             # After every epoch, validation
+            print(16)
             rsls = {'epoch': epoch}
-            rsls_train = self.eval_with_preds(total_preds, total_labels)
+            print(17)
+            # rsls_train = self.eval_with_preds(total_preds, total_labels)
             rsls_eval = self.eval(phase='val')
-            rsls.update(rsls_train)
-            rsls.update(rsls_eval)
+            print(18)
+            # rsls.update(rsls_train)
+            # rsls.update(rsls_eval)
 
             # Reset class weights for sampling if pri_mode is valid
-            if hasattr(self.data['train'].sampler, 'reset_priority'):
-                ws = get_priority(self.data['train'].sampler.ptype,
-                                  self.total_logits.detach(),
-                                  self.total_labels)
-                self.data['train'].sampler.reset_priority(ws, self.total_labels.cpu().numpy())
+            # if hasattr(self.data['train'].sampler, 'reset_priority'):
+            #     ws = get_priority(self.data['train'].sampler.ptype,
+            #                       self.total_logits.detach(),
+            #                       self.total_labels)
+            #     self.data['train'].sampler.reset_priority(ws, self.total_labels.cpu().numpy())
 
             # Log results
-            self.logger.log_acc(rsls)
+            # self.logger.log_acc(rsls)
 
             # Under validation, the best model need to be updated
-            if self.eval_acc_mic_top1 > best_acc:
-                best_epoch = epoch
-                best_acc = self.eval_acc_mic_top1
-                best_centroids = self.centroids
-                best_model_weights['feat_model'] = copy.deepcopy(self.networks['feat_model'].state_dict())
-                best_model_weights['classifier'] = copy.deepcopy(self.networks['classifier'].state_dict())
+            # if self.eval_acc_mic_top1 > best_acc:
+            #     best_epoch = epoch
+            #     best_acc = self.eval_acc_mic_top1
+            #     best_centroids = self.centroids
+            #     best_model_weights['feat_model'] = copy.deepcopy(self.networks['feat_model'].state_dict())
+            #     best_model_weights['classifier'] = copy.deepcopy(self.networks['classifier'].state_dict())
             
             # xm.master_print('===> Saving checkpoint')
             # self.save_latest(epoch)
@@ -518,52 +544,80 @@ class model ():
         return rsl
 
     def eval(self, phase='val', openset=False, save_feat=False):
-
+        start = time.process_time()
         print_str = ['Phase: %s' % (phase)]
-        print_write(print_str, self.log_file)
-        time.sleep(0.25)
-
+        # print_write(print_str, self.log_file)
+        # time.sleep(0.25)
+        print(19,time.process_time() - start)
+        start = time.process_time()
         if openset:
             xm.master_print('Under openset test mode. Open threshold is %.1f' 
                   % self.training_opt['open_threshold'])
- 
+        print(20,time.process_time() - start)
+        start = time.process_time()
         # torch.cuda.empty_cache()
+        gc.collect()
 
         # In validation or testing mode, set model to eval() and initialize running loss/correct
         for model in self.networks.values():
-            model.eval()
-
+            model.to(self.device).eval()
+        print(21,time.process_time() - start)
+        start = time.process_time()
         self.total_logits = torch.empty((0, self.training_opt['num_classes'])).to(self.device)
+        print(22,time.process_time() - start)
+        start = time.process_time()
         self.total_labels = torch.empty(0, dtype=torch.long).to(self.device)
+        print(23,time.process_time() - start)
+        start = time.process_time()
         self.total_paths = np.empty(0)
-
+        print(24,time.process_time() - start)
+        start = time.process_time()
         get_feat_only = save_feat
+        print(25,time.process_time() - start)
+        start = time.process_time()
         feats_all, labels_all, idxs_all, logits_all = [], [], [], []
+        print(26,time.process_time() - start)
+        start = time.process_time()
         featmaps_all = []
+        print(27,time.process_time() - start)
+        start = time.process_time()
         # Iterate over dataset
         para_loader = pl.ParallelLoader(self.data[phase], [self.device])
-
-        for inputs, labels, paths in tqdm(para_loader.per_device_loader(self.device)):
+        print(28,time.process_time() - start)
+        start = time.process_time()
+        for inputs, labels, paths in para_loader.per_device_loader(self.device):
+            print(29,time.process_time() - start)
+            start = time.process_time()
             inputs, labels = inputs.to(self.device), labels.to(self.device)
-
+            print(30,time.process_time() - start)
+            start = time.process_time()
             # If on training phase, enable gradients
             with torch.set_grad_enabled(False):
-
+                print(31,time.process_time() - start)
+                start = time.process_time()
                 # In validation or testing
                 self.batch_forward(inputs, labels, 
                                    centroids=self.memory['centroids'],
                                    phase=phase)
+                print(32,time.process_time() - start)
+                start = time.process_time()
                 if not get_feat_only:
                     self.total_logits = torch.cat((self.total_logits, self.logits))
                     self.total_labels = torch.cat((self.total_labels, labels))
                     self.total_paths = np.concatenate((self.total_paths, paths.cpu().numpy()))
-
+                print(33,time.process_time() - start)
+                start = time.process_time()
                 if get_feat_only:
                     logits_all.append(self.logits.cpu().numpy())
                     feats_all.append(self.features.cpu().numpy())
                     labels_all.append(labels.cpu().numpy())
                     idxs_all.append(paths.numpy())
-
+                print(34,time.process_time() - start)
+                start = time.process_time()
+                del inputs, labels
+                gc.collect()
+        del para_loader
+        gc.collect()
         if get_feat_only:
             typ = 'feat'
             if phase == 'train_plain':
@@ -583,6 +637,8 @@ class model ():
                             },
                             f, protocol=4) 
             return 
+        print(35,time.process_time() - start)
+        start = time.process_time()
         probs, preds = F.softmax(self.total_logits.detach(), dim=1).max(dim=1)
 
         if openset:
@@ -592,6 +648,8 @@ class model ():
             xm.master_print('\n\nOpenset Accuracy: %.3f' % self.openset_acc)
 
         # Calculate the overall accuracy and F measurement
+        print(36,time.process_time() - start)
+        start = time.process_time()
         self.eval_acc_mic_top1= mic_acc_cal(preds[self.total_labels != -1],
                                             self.total_labels[self.total_labels != -1])
         self.eval_f_measure = F_measure(preds, self.total_labels, openset=openset,
@@ -603,6 +661,8 @@ class model ():
                                  self.total_labels[self.total_labels != -1], 
                                  self.data['train'],
                                  acc_per_cls=True)
+        print(37,time.process_time() - start)
+        start = time.process_time()
         # Top-1 accuracy and additional string
         print_str = ['\n\n',
                      'Phase: %s' 
@@ -629,7 +689,9 @@ class model ():
                phase + '_fscore': self.eval_f_measure}
 
         if phase == 'val':
-            print_write(print_str, self.log_file)
+            print(print_str)
+            print(38,time.process_time() - start)
+            start = time.process_time()
         else:
             acc_str = ["{:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(
                 self.many_acc_top1 * 100,
@@ -655,7 +717,8 @@ class model ():
 
         xm.master_print('Calculating centroids.')
 
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
+        gc.collect()
         for model in self.networks.values():
             model.eval()
 
@@ -696,7 +759,8 @@ class model ():
 
         xm.master_print('===> Calculating KNN centroids.')
 
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
+        gc.collect()
         for model in self.networks.values():
             model.eval()
 

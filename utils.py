@@ -76,11 +76,11 @@ def batch_show(inp, title=None):
         plt.title(title)
 
 def print_write(print_str, log_file):
-    xm.master_print(*print_str)
+    print(*print_str)
     if log_file is None:
         return
-    with open(log_file, 'a') as f:
-        print(*print_str, file=f)
+    # with open(log_file, 'a') as f:
+    #     print(*print_str, file=f)
 
 def init_weights(model, weights_path, caffe=False, classifier=False):  
     """Initialize weights"""

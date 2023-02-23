@@ -22,9 +22,14 @@ from data import dataloader
 from run_networks import model
 import warnings
 import yaml
+# import tensorflow.compat.v2 as tf2
 from utils import source_import, get_value
+# import tensorflow as tf
 
-
+# if __name__ == "__main__":
+#     tf2.logging.set_verbosity(tf.logging.INFO)
+#     tf2.profiler.experimental.server.start(6000)
+#     app.run(main)
 
 
 data_root = {'ImageNet': '/mnt/disks/persist/imagenet',
