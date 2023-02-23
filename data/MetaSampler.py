@@ -31,7 +31,7 @@ class SampleLearner(nn.Module):
 
     def init_learner(self, img_num_per_cls):
         self.sample_per_class = torch.tensor(img_num_per_cls).float()
-        self.sample_per_class = (self.sample_per_class / self.sample_per_class.sum()).cuda()
+        self.sample_per_class = (self.sample_per_class / self.sample_per_class.sum())
         self.fc.apply(self.init_weights_sampler)
 
     def init_weights_sampler(self, m):
@@ -83,7 +83,7 @@ class MetaSampler(Sampler):
             targets.append(label)
 
         targets = torch.tensor(targets)
-        self.targets_onehot = nn.functional.one_hot(targets, num_classes).float().cuda()
+        self.targets_onehot = nn.functional.one_hot(targets, num_classes).float()
         self.meta_learner.init_learner(data_source.img_num_per_cls)
 
     def __iter__(self):

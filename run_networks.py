@@ -27,6 +27,9 @@ import numpy as np
 import warnings
 import pdb
 import higher
+from lightning.fabric import Fabric
+
+fabric = Fabric()
 
 
 class model ():
@@ -41,13 +44,15 @@ class model ():
             self.learner = learner
             self.meta_data = iter(data['meta'])
         
-        self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        # self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.config = config
         self.training_opt = self.config['training_opt']
         self.memory = self.config['memory']
         self.data = data
+        for i in range(len(self.data.values())):
+            self.data[self.data.keys()[i]] = fabric.setup_dataloaders(self.data.values()[i])
         self.test_mode = test
-        self.num_gpus = torch.cuda.device_count()
+        # self.num_gpus = torch.cuda.device_count()
         self.do_shuffle = config['shuffle'] if 'shuffle' in config else False
 
         # Compute epochs from iterations
@@ -103,6 +108,7 @@ class model ():
                         pickle.dump(cfeats, f)
                     self.networks['classifier'].update(cfeats)
             self.log_file = None
+        self.networks['feat_model'], self.model_optimizer = fabric.setup(self.networks['feat_model'], self.model_optimizer)
         
     def init_models(self, optimizer=True):
         networks_defs = self.config['networks']
@@ -114,7 +120,7 @@ class model ():
             self.optimizer_meta = torch.optim.Adam(self.learner.parameters(),
                                                    lr=self.training_opt['sampler'].get('lr', 0.01))
 
-        print("Using", torch.cuda.device_count(), "GPUs.")
+        # print("Using", torch.cuda.device_count(), "GPUs.")
         
         for key, val in networks_defs.items():
 
@@ -128,9 +134,9 @@ class model ():
             self.networks[key] = source_import(def_file).create_model(**model_args)
             if 'KNNClassifier' in type(self.networks[key]).__name__:
                 # Put the KNN classifier on one single GPU
-                self.networks[key] = self.networks[key].cuda()
+                self.networks[key] = self.networks[key]
             else:
-                self.networks[key] = nn.DataParallel(self.networks[key]).cuda()
+                self.networks[key] = nn.DataParallel(self.networks[key])
 
             if 'fix' in val and val['fix']:
                 print('Freezing feature weights except for self attention weights (if exist).')
@@ -161,7 +167,7 @@ class model ():
             def_file = val['def_file']
             loss_args = list(val['loss_params'].values())
 
-            self.criterions[key] = source_import(def_file).create_loss(*loss_args).cuda()
+            self.criterions[key] = source_import(def_file).create_loss(*loss_args)
             self.criterion_weights[key] = val['weight']
           
             if val['optim_params']:
@@ -215,12 +221,12 @@ class model ():
             if phase != 'test':
                 if centroids and 'FeatureLoss' in self.criterions.keys():
                     self.centroids = self.criterions['FeatureLoss'].centroids.data
-                    torch.cat([self.centroids] * self.num_gpus)
+                    torch.cat([self.centroids] * self.fabric.devices)
                 else:
                     self.centroids = None
 
             if self.centroids is not None:
-                centroids_ = torch.cat([self.centroids] * self.num_gpus)
+                centroids_ = torch.cat([self.centroids] * self.fabric.devices)
             else:
                 centroids_ = self.centroids
 
@@ -233,7 +239,8 @@ class model ():
         if self.criterion_optimizer:
             self.criterion_optimizer.zero_grad()
         # Back-propagation from loss outputs
-        self.loss.backward()
+        # self.loss.backward()
+        fabric.backward(self.loss)
         # Step optimizers
         self.model_optimizer.step()
         if self.criterion_optimizer:
@@ -276,8 +283,8 @@ class model ():
 
             # use the surrogate model to update sample rate
             val_inputs, val_targets, _ = next(self.meta_data)
-            val_inputs = val_inputs.cuda()
-            val_targets = val_targets.cuda()
+            val_inputs = val_inputs
+            val_targets = val_targets
             features, _ = self.networks['feat_model'](val_inputs)
             val_outputs, _ = fmodel(features.detach())
             val_loss = F.cross_entropy(val_outputs, val_targets, reduction='mean')
@@ -294,8 +301,8 @@ class model ():
             interval = 1 if num_classes < 10 else num_classes // 10
             for i in range(0, num_classes, interval):
                 print_str.append('class{}={:.3f},'.format(i, prob[i].item()))
-            max_mem_mb = torch.cuda.max_memory_allocated() / 1024.0 / 1024.0
-            print_str.append('\nMax Mem: {:.0f}M'.format(max_mem_mb))
+            # max_mem_mb = torch.cuda.max_memory_allocated() / 1024.0 / 1024.0
+            # print_str.append('\nMax Mem: {:.0f}M'.format(max_mem_mb))
             print_write(print_str, self.log_file)
 
     def train(self):
@@ -321,7 +328,7 @@ class model ():
             for model in self.networks.values():
                 model.train()
 
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
             
             # Set model modes and set scheduler
             # In training, step optimizer scheduler and set model to train() 
@@ -339,7 +346,7 @@ class model ():
                     break
                 if self.do_shuffle:
                     inputs, labels = self.shuffle_batch(inputs, labels)
-                inputs, labels = inputs.cuda(), labels.cuda()
+                inputs, labels = inputs, labels
 
                 # If on training phase, enable gradients
                 with torch.set_grad_enabled(True):
@@ -517,14 +524,14 @@ class model ():
             print('Under openset test mode. Open threshold is %.1f' 
                   % self.training_opt['open_threshold'])
  
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
 
         # In validation or testing mode, set model to eval() and initialize running loss/correct
         for model in self.networks.values():
             model.eval()
 
-        self.total_logits = torch.empty((0, self.training_opt['num_classes'])).cuda()
-        self.total_labels = torch.empty(0, dtype=torch.long).cuda()
+        self.total_logits = torch.empty((0, self.training_opt['num_classes']))
+        self.total_labels = torch.empty(0, dtype=torch.long)
         self.total_paths = np.empty(0)
 
         get_feat_only = save_feat
@@ -532,7 +539,7 @@ class model ():
         featmaps_all = []
         # Iterate over dataset
         for inputs, labels, paths in tqdm(self.data[phase]):
-            inputs, labels = inputs.cuda(), labels.cuda()
+            inputs, labels = inputs, labels
 
             # If on training phase, enable gradients
             with torch.set_grad_enabled(False):
@@ -639,11 +646,11 @@ class model ():
     def centroids_cal(self, data, save_all=False):
 
         centroids = torch.zeros(self.training_opt['num_classes'],
-                                   self.training_opt['feature_dim']).cuda()
+                                   self.training_opt['feature_dim'])
 
         print('Calculating centroids.')
 
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         for model in self.networks.values():
             model.eval()
 
@@ -652,7 +659,7 @@ class model ():
         # Calculate initial centroids only on training data.
         with torch.set_grad_enabled(False):
             for inputs, labels, idxs in tqdm(data):
-                inputs, labels = inputs.cuda(), labels.cuda()
+                inputs, labels = inputs, labels
 
                 # Calculate Features of each training data
                 self.batch_forward(inputs, feature_ext=True)
@@ -674,7 +681,7 @@ class model ():
                              'idxs': np.concatenate(idxs_all)},
                             f)
         # Average summed features with class count
-        centroids /= torch.tensor(class_count(data)).float().unsqueeze(1).cuda()
+        centroids /= torch.tensor(class_count(data)).float().unsqueeze(1)
 
         return centroids
 
@@ -684,7 +691,7 @@ class model ():
 
         print('===> Calculating KNN centroids.')
 
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
         for model in self.networks.values():
             model.eval()
 
@@ -693,7 +700,7 @@ class model ():
         # Calculate initial centroids only on training data.
         with torch.set_grad_enabled(False):
             for inputs, labels, idxs in tqdm(self.data[datakey]):
-                inputs, labels = inputs.cuda(), labels.cuda()
+                inputs, labels = inputs, labels
 
                 # Calculate Features of each training data
                 self.batch_forward(inputs, feature_ext=True)

@@ -119,7 +119,7 @@ if not test_mode:
                 num_classes=training_opt['num_classes'],
                 init_pow=sampler_defs.get('init_pow', 0.0),
                 freq_path=sampler_defs.get('freq_path', None)
-            ).cuda()
+            )
             sampler_dic = {
                 'batch_sampler': True,
                 'sampler': source_import(sampler_defs['def_file']).get_sampler(),
@@ -204,4 +204,3 @@ else:
         training_model.output_logits(openset=test_open)
         
 print('ALL COMPLETED.')
-s
