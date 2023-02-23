@@ -204,3 +204,4 @@ else:
         training_model.output_logits(openset=test_open)
         
 print('ALL COMPLETED.')
+s
