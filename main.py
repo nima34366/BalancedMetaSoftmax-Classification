@@ -168,9 +168,9 @@ def distrib_train(rank, flags):
                                         num_workers=training_opt['num_workers'],
                                         cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None,
                                         meta=True)
-            training_model = model(config, data, test=False, meta_sample=True, learner=learner)
+            training_model = model(config, data, device = device, test=False, meta_sample=True, learner=learner)
         else:
-            training_model = model(config, data, test=False)
+            training_model = model(config, data, device = device, test=False)
 
         training_model.train()
 
@@ -204,7 +204,7 @@ def distrib_train(rank, flags):
                                         cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None)
                 for x in splits}
         
-        training_model = model(config, data, test=True)
+        training_model = model(config, data, device = device, test=True)
         # training_model.load_model()
         training_model.load_model(args.model_dir)
         if args.save_feat in ['train_plain', 'val', 'test']:

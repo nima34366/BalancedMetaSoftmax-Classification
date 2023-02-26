@@ -23,6 +23,7 @@ from PIL import Image
 from data.ImbalanceCIFAR import IMBALANCECIFAR10, IMBALANCECIFAR100
 from torch.utils.data import DistributedSampler
 from typing import Optional, Iterator, Union
+import webdataset as wds
 
 
 
@@ -37,6 +38,37 @@ RGB_statistics = {
         'std':[0.229, 0.224, 0.225]
     }
 }
+
+def my_worker_splitter(urls):
+   """Split urls per worker
+   Selects a subset of urls based on Torch get_worker_info.
+   Used as a shard selection function in Dataset.
+   replaces wds.split_by_worker"""
+
+   urls = [url for url in urls]
+
+   assert isinstance(urls, list)
+
+   worker_info = torch.utils.data.get_worker_info()
+   if worker_info is not None:
+       wid = worker_info.id
+       num_workers = worker_info.num_workers
+
+       return urls[wid::num_workers]
+   else:
+       return urls
+
+def my_node_splitter(urls):
+   """Split urls_ correctly per accelerator node
+   :param urls:
+   :return: slice of urls_
+   """
+   rank=xm.get_ordinal()
+   num_replicas=xm.xrt_world_size()
+
+   urls_this = urls[rank::num_replicas]
+  
+   return urls_this
 
 # Data transformation with augmentation
 def get_data_transform(split, rgb_mean, rbg_std, key='default'):
@@ -224,6 +256,29 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
         print('Use data transformation:', transform)
 
         set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
+        
+        if xm.is_master_ordinal():
+            if 'webdataset' not in os.listdir(data_root):
+                os.mkdir(data_root+'/webdataset')
+                with wds.ShardWriter(data_root+'/webdataset/'+phase+"-%06d.tar") as sink:
+                    for sample, label, index in set_:
+                        if index%1000==0: print(index)
+                        sink.write({
+                            "__key__": index,
+                            "ppm": sample,
+                            "cls": label
+                        })
+        xm.wait_device_ops()
+
+        set_ = wds.Dataset(data_root+'/webdataset/'+phase+"*",
+            splitter=my_worker_splitter,
+            nodesplitter=my_node_splitter,
+            shardshuffle=shuffle,
+            length=len(set_)//num_workers)
+            .shuffle(10000)
+            .decode("rgb")
+            .to_tuple("ppm","cls","__key__")
+
 
 
     print(len(set_))
@@ -232,18 +287,18 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
         print('Using sampler: ', sampler_dic['sampler'])
         return DataLoader(dataset=set_,
                            batch_sampler=DistributedSamplerWrapper(sampler_dic['sampler'](set_, **sampler_dic['params']), xm.xrt_world_size(), xm.get_ordinal(), shuffle=False),
-                           num_workers=num_workers)
+                           num_workers=num_workers, drop_last=False)
 
     elif sampler_dic and (phase == 'train' or meta):
         print('Using sampler: ', sampler_dic['sampler'])
         # print('Sample %s samples per-class.' % sampler_dic['num_samples_cls'])
         print('Sampler parameters: ', sampler_dic['params'])
-        return DataLoader(dataset=set_, batch_size=batch_size, shuffle=False,
+        return DataLoader(dataset=set_, batch_size=None, shuffle=False, drop_last=False,
                            sampler=DistributedSamplerWrapper(sampler_dic['sampler'](set_, **sampler_dic['params']), xm.xrt_world_size(), xm.get_ordinal(), shuffle=False),
                            num_workers=num_workers)
     else:
         print('No sampler.')
         print('Shuffle is %s.' % (shuffle))
-        return DataLoader(dataset=set_, batch_size=batch_size, num_workers=num_workers, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
+        return DataLoader(dataset=set_, batch_size=None, drop_last=False, num_workers=num_workers)
 
 

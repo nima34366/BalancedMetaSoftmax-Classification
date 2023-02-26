@@ -16,8 +16,8 @@ import os
 import copy
 import pickle
 import torch
-import torch_xla
-import torch_xla.core.xla_model as xm
+# import torch_xla
+# import torch_xla.core.xla_model as xm
 import torch_xla.debug.metrics as met
 import torch_xla.distributed.parallel_loader as pl
 import torch.nn as nn
@@ -34,12 +34,12 @@ import time
 import gc
 import higher
 # import torch.profiler
-import torch_xla.debug.profiler as xp
+# import torch_xla.debug.profiler as xp
 
 
 class model ():
     
-    def __init__(self, config, data, test=False, meta_sample=False, learner=None):
+    def __init__(self, config, data, device, test=False, meta_sample=False, learner=None):
 
         self.meta_sample = meta_sample
 
@@ -50,7 +50,7 @@ class model ():
             self.meta_data = iter(data['meta'])
         
         # self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-        self.device = xm.xla_device()
+        self.device = device
         self.config = config
         self.training_opt = self.config['training_opt']
         self.memory = self.config['memory']
@@ -311,7 +311,7 @@ class model ():
 
     def train(self):
         # When training the network
-        server = xp.start_server(9012)
+        # server = xp.start_server(9012)
         print_str = ['Phase: train']
         print_write(print_str, self.log_file)
         time.sleep(0.25)
@@ -351,74 +351,74 @@ class model ():
             total_preds = []
             total_labels = []
             print(8)
-            prof = torch.profiler.profile(
-                schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-                on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/wickramasinghenlssck/BalancedMetaSoftmax-Classification/logs/tens'),
-                record_shapes=True,
-                with_stack=True)
-            prof.start()
+            # prof = torch.profiler.profile(
+            #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+            #     on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/wickramasinghenlssck/BalancedMetaSoftmax-Classification/logs/tens'),
+            #     record_shapes=True,
+            #     with_stack=True)
+            # prof.start()
             for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device),1):
                 # Break when step equal to epoch step
-                with xp.StepTrace('train_loop', step_num=step):
-                    print(9)
-                    if step == self.epoch_steps:
-                        break
-                    if self.do_shuffle:
-                        inputs, labels = self.shuffle_batch(inputs, labels)
-                    inputs, labels = inputs.to(self.device), labels.to(self.device)
-                    print(10)
-                    # If on training phase, enable gradients
-                    with torch.set_grad_enabled(True):
-                        if self.meta_sample:
-                            # do inner loop
-                            self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
-                        print(11)
-                        # If training, forward with loss, and no top 5 accuracy calculation
-                        self.batch_forward(inputs, labels, 
-                                        centroids=self.memory['centroids'],
-                                        phase='train')
-                        print(12)
-                        self.batch_loss(labels)
-                        self.batch_backward()
-                        print(13)
-                        # Tracking predictions
-                        _, preds = torch.max(self.logits, 1)
-                        # total_preds.append(torch2numpy(preds))
-                        # total_labels.append(torch2numpy(labels))
-                        print(14)
-                        # Output minibatch training results
-                        if step % self.training_opt['display_step'] == 0:
+                # with xp.StepTrace('train_loop', step_num=step):
+                print(9)
+                if step == self.epoch_steps:
+                    break
+                if self.do_shuffle:
+                    inputs, labels = self.shuffle_batch(inputs, labels)
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
+                print(10)
+                # If on training phase, enable gradients
+                with torch.set_grad_enabled(True):
+                    if self.meta_sample:
+                        # do inner loop
+                        self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
+                    print(11)
+                    # If training, forward with loss, and no top 5 accuracy calculation
+                    self.batch_forward(inputs, labels, 
+                                    centroids=self.memory['centroids'],
+                                    phase='train')
+                    print(12)
+                    self.batch_loss(labels)
+                    self.batch_backward()
+                    print(13)
+                    # Tracking predictions
+                    _, preds = torch.max(self.logits, 1)
+                    # total_preds.append(torch2numpy(preds))
+                    # total_labels.append(torch2numpy(labels))
+                    print(14)
+                    # Output minibatch training results
+                    if step % self.training_opt['display_step'] == 0:
 
-                            minibatch_loss_feat = self.loss_feat.item() \
-                                if 'FeatureLoss' in self.criterions.keys() else None
-                            minibatch_loss_perf = self.loss_perf.item() \
-                                if 'PerformanceLoss' in self.criterions else None
-                            minibatch_loss_total = self.loss.item()
-                            minibatch_acc = mic_acc_cal(preds, labels)
+                        minibatch_loss_feat = self.loss_feat.item() \
+                            if 'FeatureLoss' in self.criterions.keys() else None
+                        minibatch_loss_perf = self.loss_perf.item() \
+                            if 'PerformanceLoss' in self.criterions else None
+                        minibatch_loss_total = self.loss.item()
+                        minibatch_acc = mic_acc_cal(preds, labels)
 
-                            print_str = ['Epoch: [%d/%d]' 
-                                        % (epoch, self.training_opt['num_epochs']),
-                                        'Step: %5d' 
-                                        % (step),
-                                        'Minibatch_loss_feature: %.3f' 
-                                        % (minibatch_loss_feat) if minibatch_loss_feat else '',
-                                        'Minibatch_loss_performance: %.3f'
-                                        % (minibatch_loss_perf) if minibatch_loss_perf else '',
-                                        'Minibatch_accuracy_micro: %.3f'
-                                        % (minibatch_acc)]
-                            print_write(print_str, self.log_file)
+                        print_str = ['Epoch: [%d/%d]' 
+                                    % (epoch, self.training_opt['num_epochs']),
+                                    'Step: %5d' 
+                                    % (step),
+                                    'Minibatch_loss_feature: %.3f' 
+                                    % (minibatch_loss_feat) if minibatch_loss_feat else '',
+                                    'Minibatch_loss_performance: %.3f'
+                                    % (minibatch_loss_perf) if minibatch_loss_perf else '',
+                                    'Minibatch_accuracy_micro: %.3f'
+                                    % (minibatch_acc)]
+                        print_write(print_str, self.log_file)
 
-                            loss_info = {
-                                'Epoch': epoch,
-                                'Step': step,
-                                'Total': minibatch_loss_total,
-                                'CE': minibatch_loss_perf,
-                                'feat': minibatch_loss_feat
-                            }
+                        loss_info = {
+                            'Epoch': epoch,
+                            'Step': step,
+                            'Total': minibatch_loss_total,
+                            'CE': minibatch_loss_perf,
+                            'feat': minibatch_loss_feat
+                        }
 
-                        del inputs,labels
-                        gc.collect()
-                        print(15)
+                    del inputs,labels
+                    gc.collect()
+                    print(15)
                             # xm.master_print(met.metrics_report())
                             # self.logger.log_loss(loss_info)
 
@@ -437,7 +437,7 @@ class model ():
                     #         inlist.append(labels.cpu().numpy())
                     #     self.data['train'].sampler.update_weights(*inlist)
                         # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
-            prof.stop()
+            # prof.stop()
             # if hasattr(self.data['train'].sampler, 'get_weights'):
             #     self.logger.log_ws(epoch, self.data['train'].sampler.get_weights())
             # if hasattr(self.data['train'].sampler, 'reset_weights'):
