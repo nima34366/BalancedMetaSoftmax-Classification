@@ -23,7 +23,7 @@ from PIL import Image
 from data.ImbalanceCIFAR import IMBALANCECIFAR10, IMBALANCECIFAR100
 from torch.utils.data import DistributedSampler
 from typing import Optional, Iterator, Union
-import webdataset as wds
+from webdataset import WebDataset, ShardWriter
 
 
 
@@ -43,7 +43,7 @@ def my_worker_splitter(urls):
    """Split urls per worker
    Selects a subset of urls based on Torch get_worker_info.
    Used as a shard selection function in Dataset.
-   replaces wds.split_by_worker"""
+   replaces split_by_worker"""
 
    urls = [url for url in urls]
 
@@ -211,13 +211,13 @@ class LT_Dataset(Dataset):
         label = self.labels[index]
 
         with open(path, 'rb') as f:
-            sample = Image.open(f).convert('RGB')
+            # sample = Image.open(f).convert('RGB')
+            sample = f.read()
 
-        if self.transform is not None:
-            sample = self.transform(sample)
+        # if self.transform is not None:
+        #     sample = self.transform(sample)
 
         return sample, label, index
-
 
 # Load datasets
 def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_workers=4, test_open=False, shuffle=True, cifar_imb_ratio=None, meta=False):
@@ -257,26 +257,29 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
 
         set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
 
-    print(len(set_))
+    print()
     
     if xm.is_master_ordinal():
         if txt_split not in os.listdir(data_root+'/'+dataset):
             os.mkdir(data_root+'/'+dataset+'/'+txt_split)
-            with wds.ShardWriter(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+"-%06d.tar") as sink:
+            with ShardWriter(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+"-%06d.tar", maxcount=10000) as sink:
                 for sample, label, index in set_:
                     if index%1000==0: print(index)
                     sink.write({
                         "__key__": str(index),
-                        "sample.pth": sample,
+                        "sample.jpeg": sample,
                         "label.cls": label,
                         "index.cls": index
                     })
     xm.rendezvous('Creating webdataset')
+    dataset_size = len(set_)
+    def dataset_len(self):
+        return dataset_size
+    WebDataset.__len__ = dataset_len
     if (shuffle):
-        set_ = wds.WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar').shuffle(10000).decode("rgb").to_tuple("sample.pth","label.cls","index.cls").batched(batch_size, partial=True)
+        set_ = WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar', resampled=True).shuffle(1000).decode("pil").to_tuple("sample.jpeg","label.cls","index.cls").map_tuple(transform, lambda x:x, lambda x:x).batched(batch_size, partial=False).with_epoch(dataset_size//batch_size)
     else:
-        set_ = wds.WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar').decode("rgb").to_tuple("sample.pth","label.cls","index.cls").batched(batch_size, partial=True)
-
+        set_ = WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar', resampled=True).decode("pil").to_tuple("sample.jpeg","label.cls","index.cls").map_tuple(transform, lambda x:x, lambda x:x).batched(batch_size, partial=False).with_epoch(dataset_size//batch_size)
 
 
 
@@ -296,6 +299,9 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
     else:
         print('No sampler.')
         print('Shuffle is %s.' % (shuffle))
+        # return WebLoader(dataset=set_, num_workers=num_workers).ddp_equalize(dataset_size // batch_size)
         return DataLoader(dataset=set_, batch_size=None, drop_last=False, num_workers=num_workers)
+        # return DataLoader(dataset=set_, batch_size=batch_size, num_workers=num_workers, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
+        # return DataLoader(dataset=set_, batch_size=None, num_workers=num_workers, drop_last=True, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=False))
 
 

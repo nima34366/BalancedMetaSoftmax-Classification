@@ -58,7 +58,7 @@ class model ():
         self.test_mode = test
         self.num_gpus = torch.cuda.device_count()
         self.do_shuffle = config['shuffle'] if 'shuffle' in config else False
-        self.training_data_num = self.config['training_data_num']
+        
 
         # Compute epochs from iterations
         if self.training_opt.get('num_iterations', False):
@@ -83,6 +83,7 @@ class model ():
             # for each epoch based on actual number of training data instead of 
             # oversampled data number 
             xm.master_print('Using steps for training.')
+            self.training_data_num = len(self.data['train'].dataset)
             self.epoch_steps = int(self.training_data_num  \
                                    / self.training_opt['batch_size'])
 
@@ -357,7 +358,7 @@ class model ():
             #     record_shapes=True,
             #     with_stack=True)
             # prof.start()
-            for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device),1):
+            for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device)):
                 # Break when step equal to epoch step
                 # with xp.StepTrace('train_loop', step_num=step):
                 print(9)
@@ -449,7 +450,7 @@ class model ():
             rsls = {'epoch': epoch}
             print(17)
             # rsls_train = self.eval_with_preds(total_preds, total_labels)
-            rsls_eval = self.eval(phase='val')
+            # rsls_eval = self.eval(phase='val')
             print(18)
             # rsls.update(rsls_train)
             # rsls.update(rsls_eval)
@@ -616,6 +617,7 @@ class model ():
                 start = time.process_time()
                 del inputs, labels
                 gc.collect()
+            print(35,time.process_time() - start)
         del para_loader
         gc.collect()
         if get_feat_only:
