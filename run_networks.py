@@ -58,6 +58,7 @@ class model ():
         self.test_mode = test
         self.num_gpus = torch.cuda.device_count()
         self.do_shuffle = config['shuffle'] if 'shuffle' in config else False
+        self.training_data_num = self.config['training_data_num']
 
         # Compute epochs from iterations
         if self.training_opt.get('num_iterations', False):
@@ -82,7 +83,6 @@ class model ():
             # for each epoch based on actual number of training data instead of 
             # oversampled data number 
             xm.master_print('Using steps for training.')
-            self.training_data_num = len(self.data['train'].dataset)
             self.epoch_steps = int(self.training_data_num  \
                                    / self.training_opt['batch_size'])
 
@@ -123,7 +123,7 @@ class model ():
             self.optimizer_meta = torch.optim.Adam(self.learner.parameters(),
                                                    lr=self.training_opt['sampler'].get('lr', 0.01))
 
-        xm.master_print("Using", torch.cuda.device_count(), "GPUs.")
+        # xm.master_print("Using", torch.cuda.device_count(), "GPUs.")
         
         for key, val in networks_defs.items():
 
@@ -305,8 +305,8 @@ class model ():
             interval = 1 if num_classes < 10 else num_classes // 10
             for i in range(0, num_classes, interval):
                 print_str.append('class{}={:.3f},'.format(i, prob[i].item()))
-            max_mem_mb = torch.cuda.max_memory_allocated() / 1024.0 / 1024.0
-            print_str.append('\nMax Mem: {:.0f}M'.format(max_mem_mb))
+            # max_mem_mb = torch.cuda.max_memory_allocated() / 1024.0 / 1024.0
+            # print_str.append('\nMax Mem: {:.0f}M'.format(max_mem_mb))
             print_write(print_str, self.log_file)
 
     def train(self):
@@ -654,61 +654,61 @@ class model ():
                                             self.total_labels[self.total_labels != -1])
         self.eval_f_measure = F_measure(preds, self.total_labels, openset=openset,
                                         theta=self.training_opt['open_threshold'])
-        self.many_acc_top1, \
-        self.median_acc_top1, \
-        self.low_acc_top1, \
-        self.cls_accs = shot_acc(preds[self.total_labels != -1],
-                                 self.total_labels[self.total_labels != -1], 
-                                 self.data['train'],
-                                 acc_per_cls=True)
+        # self.many_acc_top1, \
+        # self.median_acc_top1, \
+        # self.low_acc_top1, \
+        # self.cls_accs = shot_acc(preds[self.total_labels != -1],
+        #                          self.total_labels[self.total_labels != -1], 
+        #                          self.data['train'],
+        #                          acc_per_cls=True)
         print(37,time.process_time() - start)
         start = time.process_time()
         # Top-1 accuracy and additional string
-        print_str = ['\n\n',
-                     'Phase: %s' 
-                     % (phase),
-                     '\n\n',
-                     'Evaluation_accuracy_micro_top1: %.3f' 
-                     % (self.eval_acc_mic_top1),
-                     '\n',
-                     'Averaged F-measure: %.3f' 
-                     % (self.eval_f_measure),
-                     '\n',
-                     'Many_shot_accuracy_top1: %.3f' 
-                     % (self.many_acc_top1),
-                     'Median_shot_accuracy_top1: %.3f' 
-                     % (self.median_acc_top1),
-                     'Low_shot_accuracy_top1: %.3f' 
-                     % (self.low_acc_top1),
-                     '\n']
+        # print_str = ['\n\n',
+        #              'Phase: %s' 
+        #              % (phase),
+        #              '\n\n',
+        #              'Evaluation_accuracy_micro_top1: %.3f' 
+        #              % (self.eval_acc_mic_top1),
+        #              '\n',
+        #              'Averaged F-measure: %.3f' 
+        #              % (self.eval_f_measure),
+                    #  '\n',
+                    #  'Many_shot_accuracy_top1: %.3f' 
+                    #  % (self.many_acc_top1),
+                    #  'Median_shot_accuracy_top1: %.3f' 
+                    #  % (self.median_acc_top1),
+                    #  'Low_shot_accuracy_top1: %.3f' 
+                    #  % (self.low_acc_top1),
+                    #  '\n']
         
-        rsl = {phase + '_all': self.eval_acc_mic_top1,
-               phase + '_many': self.many_acc_top1,
-               phase + '_median': self.median_acc_top1,
-               phase + '_low': self.low_acc_top1,
-               phase + '_fscore': self.eval_f_measure}
+        # rsl = {phase + '_all': self.eval_acc_mic_top1,
+        #        phase + '_many': self.many_acc_top1,
+        #        phase + '_median': self.median_acc_top1,
+        #        phase + '_low': self.low_acc_top1,
+        #        phase + '_fscore': self.eval_f_measure}
 
-        if phase == 'val':
-            print(print_str)
-            print(38,time.process_time() - start)
-            start = time.process_time()
-        else:
-            acc_str = ["{:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(
-                self.many_acc_top1 * 100,
-                self.median_acc_top1 * 100,
-                self.low_acc_top1 * 100,
-                self.eval_acc_mic_top1 * 100)]
-            if self.log_file is not None and os.path.exists(self.log_file):
-                print_write(print_str, self.log_file)
-                print_write(acc_str, self.log_file)
-            else:
-                xm.master_print(*print_str)
-                xm.master_print(*acc_str)
+        # if phase == 'val':
+        #     print(print_str)
+        #     print(38,time.process_time() - start)
+        #     start = time.process_time()
+        # else:
+        #     acc_str = ["{:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(
+        #         self.many_acc_top1 * 100,
+        #         self.median_acc_top1 * 100,
+        #         self.low_acc_top1 * 100,
+        #         self.eval_acc_mic_top1 * 100)]
+        #     if self.log_file is not None and os.path.exists(self.log_file):
+        #         print_write(print_str, self.log_file)
+        #         print_write(acc_str, self.log_file)
+        #     else:
+        #         xm.master_print(*print_str)
+        #         xm.master_print(*acc_str)
         
-        if phase == 'test':
-            with open(os.path.join(self.training_opt['log_dir'], 'cls_accs.pkl'), 'wb') as f:
-                pickle.dump(self.cls_accs, f)
-        return rsl
+        # if phase == 'test':
+        #     with open(os.path.join(self.training_opt['log_dir'], 'cls_accs.pkl'), 'wb') as f:
+        #         pickle.dump(self.cls_accs, f)
+        # return rsl
             
     def centroids_cal(self, data, save_all=False):
 

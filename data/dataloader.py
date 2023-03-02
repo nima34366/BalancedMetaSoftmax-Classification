@@ -256,32 +256,29 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
         print('Use data transformation:', transform)
 
         set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
-        
-        if xm.is_master_ordinal():
-            if 'webdataset' not in os.listdir(data_root):
-                os.mkdir(data_root+'/webdataset')
-                with wds.ShardWriter(data_root+'/webdataset/'+phase+"-%06d.tar") as sink:
-                    for sample, label, index in set_:
-                        if index%1000==0: print(index)
-                        sink.write({
-                            "__key__": index,
-                            "ppm": sample,
-                            "cls": label
-                        })
-        xm.wait_device_ops()
-
-        set_ = wds.Dataset(data_root+'/webdataset/'+phase+"*",
-            splitter=my_worker_splitter,
-            nodesplitter=my_node_splitter,
-            shardshuffle=shuffle,
-            length=len(set_)//num_workers)
-            .shuffle(10000)
-            .decode("rgb")
-            .to_tuple("ppm","cls","__key__")
-
-
 
     print(len(set_))
+    
+    if xm.is_master_ordinal():
+        if txt_split not in os.listdir(data_root+'/'+dataset):
+            os.mkdir(data_root+'/'+dataset+'/'+txt_split)
+            with wds.ShardWriter(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+"-%06d.tar") as sink:
+                for sample, label, index in set_:
+                    if index%1000==0: print(index)
+                    sink.write({
+                        "__key__": str(index),
+                        "sample.pth": sample,
+                        "label.cls": label,
+                        "index.cls": index
+                    })
+    xm.rendezvous('Creating webdataset')
+    if (shuffle):
+        set_ = wds.WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar').shuffle(10000).decode("rgb").to_tuple("sample.pth","label.cls","index.cls").batched(batch_size, partial=True)
+    else:
+        set_ = wds.WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar').decode("rgb").to_tuple("sample.pth","label.cls","index.cls").batched(batch_size, partial=True)
+
+
+
 
     if sampler_dic and phase == 'train' and sampler_dic.get('batch_sampler', False):
         print('Using sampler: ', sampler_dic['sampler'])

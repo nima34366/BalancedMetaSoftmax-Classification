@@ -22,9 +22,10 @@ networks:
     params: {dataset: ImageNet_LT, dropout: null, log_dir: ./logs/ImageNet_LT/clslearn/softmax_resnet10_cbs,
       stage1_weights: false, use_fc: false, use_selfatt: false}
 shuffle: false
+training_data_num: 115846
 training_opt:
   backbone: resnet10
-  batch_size: 512
+  batch_size: 128
   dataset: ImageNet_LT
   display_step: 10
   feature_dim: 512
