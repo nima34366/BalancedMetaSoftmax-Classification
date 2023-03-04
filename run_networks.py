@@ -51,7 +51,6 @@ class model ():
             self.learner = learner
             self.meta_data = iter(data['meta'])
         
-        # self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.device = device
         self.config = config
         self.training_opt = self.config['training_opt']
@@ -74,9 +73,6 @@ class model ():
         # Initialize model
         self.networks = networks
         self.init_params()
-        # self.init_models()
-        # self.model_optim_params_list = model_optim_params_list
-        # Load pre-trained model parameters
         if 'model_dir' in self.config and self.config['model_dir'] is not None:
             self.load_model(self.config['model_dir'])
 
@@ -88,7 +84,6 @@ class model ():
             # oversampled data number 
             xm.master_print('Using steps for training.')
             self.training_data_num = len(self.data['train'].dataset)
-            # xm.master_print(self.training_data_num, self.training_opt['batch_size'])
             self.epoch_steps = int(self.training_data_num/self.training_opt['batch_size'])
             xm.master_print('Num epoch steps', self.epoch_steps)
 
@@ -132,7 +127,7 @@ class model ():
                 # Freeze all parameters except self attention parameters
                 if 'selfatt' not in param_name and 'fc' not in param_name:
                     param.requires_grad = False
-            # xm.master_print('  | ', param_name, param.requires_grad)
+            xm.master_print('  | ', param_name, param.requires_grad)
 
             if self.meta_sample and key!='classifier':
                 # avoid adding classifier parameters to the optimizer,
@@ -301,19 +296,19 @@ class model ():
     def train(self):
         # When training the network
         # server = xp.start_server(9012)
-        # print_str = ['Phase: train']
-        # print_write(print_str, self.log_file)
+        print_str = ['Phase: train']
+        print_write(print_str, self.log_file)
         # time.sleep(0.25)
 
-        # print_write(['Do shuffle??? --- ', self.do_shuffle], self.log_file)
+        print_write(['Do shuffle??? --- ', self.do_shuffle], self.log_file)
 
         # Initialize best model
-        # best_model_weights = {}
-        # best_model_weights['feat_model'] = copy.deepcopy(self.networks['feat_model'].state_dict())
-        # best_model_weights['classifier'] = copy.deepcopy(self.networks['classifier'].state_dict())
-        # best_acc = 0.0
-        # best_epoch = 0
-        # best_centroids = self.centroids
+        best_model_weights = {}
+        best_model_weights['feat_model'] = copy.deepcopy(self.networks['feat_model'].state_dict())
+        best_model_weights['classifier'] = copy.deepcopy(self.networks['classifier'].state_dict())
+        best_acc = 0.0
+        best_epoch = 0
+        best_centroids = self.centroids
 
         end_epoch = self.training_opt['num_epochs']
 
@@ -324,155 +319,131 @@ class model ():
         for epoch in range(1, end_epoch + 1):
             xm.master_print('Time for epoch',epoch,time.time() - start)
             start = time.time()
-            xm.master_print(1)
             para_loader = pl.ParallelLoader(self.data['train'], [self.device])
-            # self.data['train'].sampler.set_epoch(epoch)
-            xm.master_print(2)
+            self.data['train'].sampler.set_epoch(epoch)
             for model in self.networks.values():
                 model.train()
-            xm.master_print(3)
 
             # torch.cuda.empty_cache()
             # gc.collect()
             # Set model modes and set scheduler
             # In training, step optimizer scheduler and set model to train() 
-            xm.master_print(6)
             # Iterate over dataset
-            # total_preds = []
-            # total_labels = []
-            xm.master_print(8)
-            # prof = torch.profiler.profile(
-            #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-            #     on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/wickramasinghenlssck/BalancedMetaSoftmax-Classification/logs/tens'),
-            #     record_shapes=True,
-            #     with_stack=True)
-            # prof.start()
+            total_preds = []
+            total_labels = []
             xm.master_print(self.epoch_steps)
             for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device)):
             # for step, (inputs, labels, indexes) in enumerate(para_loader):
                 # Break when step equal to epoch step
-                # with xp.StepTrace('train_loop', step_num=step):
-                xm.master_print(9)
-                # if step == self.epoch_steps:
-                #     break
+                if step == self.epoch_steps:
+                    break
                 # if self.do_shuffle:
                 #     inputs, labels = self.shuffle_batch(inputs, labels)
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
-                xm.master_print(10)
                 # If on training phase, enable gradients
                 # with torch.set_grad_enabled(True):
                 if self.meta_sample:
                     # do inner loop
                     self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
-                xm.master_print(11)
                 # If training, forward with loss, and no top 5 accuracy calculation
                 self.batch_forward(inputs, labels, 
                                 centroids=self.memory['centroids'],
                                 phase='train')
-                xm.master_print(12)
                 self.batch_loss(labels)
                 self.batch_backward()
-                xm.master_print(13)
                 # Tracking predictions
-                # _, preds = torch.max(self.logits, 1)
-                # total_preds.append(torch2numpy(preds))
-                # total_labels.append(torch2numpy(labels))
-                xm.master_print(14)
+                _, preds = torch.max(self.logits, 1)
+                total_preds.append(torch2numpy(preds))
+                total_labels.append(torch2numpy(labels))
                 # Output minibatch training results
-                # if step % self.training_opt['display_step'] == 0:
+                if step % self.training_opt['display_step'] == 0:
 
-                #     minibatch_loss_feat = self.loss_feat.item() \
-                #         if 'FeatureLoss' in self.criterions.keys() else None
-                #     minibatch_loss_perf = self.loss_perf.item() \
-                #         if 'PerformanceLoss' in self.criterions else None
-                #     minibatch_loss_total = self.loss.item()
-                #     minibatch_acc = mic_acc_cal(preds, labels)
+                    minibatch_loss_feat = self.loss_feat.item() \
+                        if 'FeatureLoss' in self.criterions.keys() else None
+                    minibatch_loss_perf = self.loss_perf.item() \
+                        if 'PerformanceLoss' in self.criterions else None
+                    minibatch_loss_total = self.loss.item()
+                    minibatch_acc = mic_acc_cal(preds, labels)
 
-                #     print_str = ['Epoch: [%d/%d]' 
-                #                 % (epoch, self.training_opt['num_epochs']),
-                #                 'Step: %5d' 
-                #                 % (step),
-                #                 'Minibatch_loss_feature: %.3f' 
-                #                 % (minibatch_loss_feat) if minibatch_loss_feat else '',
-                #                 'Minibatch_loss_performance: %.3f'
-                #                 % (minibatch_loss_perf) if minibatch_loss_perf else '',
-                #                 'Minibatch_accuracy_micro: %.3f'
-                #                 % (minibatch_acc)]
-                #     print_write(print_str, self.log_file)
+                    print_str = ['Epoch: [%d/%d]' 
+                                % (epoch, self.training_opt['num_epochs']),
+                                'Step: %5d' 
+                                % (step),
+                                'Minibatch_loss_feature: %.3f' 
+                                % (minibatch_loss_feat) if minibatch_loss_feat else '',
+                                'Minibatch_loss_performance: %.3f'
+                                % (minibatch_loss_perf) if minibatch_loss_perf else '',
+                                'Minibatch_accuracy_micro: %.3f'
+                                % (minibatch_acc)]
+                    print_write(print_str, self.log_file)
 
-                #     loss_info = {
-                #         'Epoch': epoch,
-                #         'Step': step,
-                #         'Total': minibatch_loss_total,
-                #         'CE': minibatch_loss_perf,
-                #         'feat': minibatch_loss_feat
-                #     }
+                    loss_info = {
+                        'Epoch': epoch,
+                        'Step': step,
+                        'Total': minibatch_loss_total,
+                        'CE': minibatch_loss_perf,
+                        'feat': minibatch_loss_feat
+                    }
 
                 # del inputs,labels
                 # del inputs,labels, self.logits, self.direct_memory_feature, self.centroids, self.features, self.feature_maps, self.loss, self.loss_perf
 
                 # gc.collect()
-                xm.master_print(15)
-                            # xm.master_print(met.metrics_report())
-                            # self.logger.log_loss(loss_info)
+                    xm.master_print(met.metrics_report())
+                    self.logger.log_loss(loss_info)
 
-                    # Update priority weights if using PrioritizedSampler
-                    # if self.training_opt['sampler'] and \
-                    #    self.training_opt['sampler']['type'] == 'PrioritizedSampler':
-                    # if hasattr(self.data['train'].sampler, 'update_weights'):
-                    #     if hasattr(self.data['train'].sampler, 'ptype'):
-                    #         ptype = self.data['train'].sampler.ptype 
-                    #     else:
-                    #         ptype = 'score'
-                    #     ws = get_priority(ptype, self.logits.detach(), labels)
-                    #     # ws = logits2score(self.logits.detach(), labels)
-                    #     inlist = [indexes.cpu().numpy(), ws]
-                    #     if self.training_opt['sampler']['type'] == 'ClassPrioritySampler':
-                    #         inlist.append(labels.cpu().numpy())
-                    #     self.data['train'].sampler.update_weights(*inlist)
-                        # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
+                # Update priority weights if using PrioritizedSampler
+                # if self.training_opt['sampler'] and \
+                #    self.training_opt['sampler']['type'] == 'PrioritizedSampler':
+                if hasattr(self.data['train'].sampler, 'update_weights'):
+                    if hasattr(self.data['train'].sampler, 'ptype'):
+                        ptype = self.data['train'].sampler.ptype 
+                    else:
+                        ptype = 'score'
+                    ws = get_priority(ptype, self.logits.detach(), labels)
+                    # ws = logits2score(self.logits.detach(), labels)
+                    inlist = [indexes.cpu().numpy(), ws]
+                    if self.training_opt['sampler']['type'] == 'ClassPrioritySampler':
+                        inlist.append(labels.cpu().numpy())
+                    self.data['train'].sampler.update_weights(*inlist)
+                    # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
                 xm.rendezvous('step')
-            # prof.stop()
-            # if hasattr(self.data['train'].sampler, 'get_weights'):
-            #     self.logger.log_ws(epoch, self.data['train'].sampler.get_weights())
-            # if hasattr(self.data['train'].sampler, 'reset_weights'):
-            #     self.data['train'].sampler.reset_weights(epoch)
+            if hasattr(self.data['train'].sampler, 'get_weights'):
+                self.logger.log_ws(epoch, self.data['train'].sampler.get_weights())
+            if hasattr(self.data['train'].sampler, 'reset_weights'):
+                self.data['train'].sampler.reset_weights(epoch)
+
             self.model_optimizer_scheduler.step()
-            xm.master_print(5)
             if self.criterion_optimizer:
                 self.criterion_optimizer_scheduler.step()
-            # del indexes
-            # gc.collect()
+
             # After every epoch, validation
-            xm.master_print(16)
-            # rsls = {'epoch': epoch}
-            xm.master_print(17)
-            # rsls_train = self.eval_with_preds(total_preds, total_labels)
-            # rsls_eval = self.eval(phase='val')
-            xm.master_print(18)
-            # rsls.update(rsls_train)
-            # rsls.update(rsls_eval)
+            rsls = {'epoch': epoch}
+            rsls_train = self.eval_with_preds(total_preds, total_labels)
+            rsls_eval = self.eval(phase='val')
+            rsls.update(rsls_train)
+            rsls.update(rsls_eval)
 
             # Reset class weights for sampling if pri_mode is valid
-            # if hasattr(self.data['train'].sampler, 'reset_priority'):
-            #     ws = get_priority(self.data['train'].sampler.ptype,
-            #                       self.total_logits.detach(),
-            #                       self.total_labels)
-            #     self.data['train'].sampler.reset_priority(ws, self.total_labels.cpu().numpy())
+            if hasattr(self.data['train'].sampler, 'reset_priority'):
+                ws = get_priority(self.data['train'].sampler.ptype,
+                                  self.total_logits.detach(),
+                                  self.total_labels)
+                self.data['train'].sampler.reset_priority(ws, self.total_labels.cpu().numpy())
 
             # Log results
-            # self.logger.log_acc(rsls)
+            self.logger.log_acc(rsls)
 
             # Under validation, the best model need to be updated
-            # if self.eval_acc_mic_top1 > best_acc:
-            #     best_epoch = epoch
-            #     best_acc = self.eval_acc_mic_top1
-            #     best_centroids = self.centroids
-            #     best_model_weights['feat_model'] = copy.deepcopy(self.networks['feat_model'].state_dict())
-            #     best_model_weights['classifier'] = copy.deepcopy(self.networks['classifier'].state_dict())
+            if self.eval_acc_mic_top1 > best_acc:
+                best_epoch = epoch
+                best_acc = self.eval_acc_mic_top1
+                best_centroids = self.centroids
+                best_model_weights['feat_model'] = copy.deepcopy(self.networks['feat_model'].state_dict())
+                best_model_weights['classifier'] = copy.deepcopy(self.networks['classifier'].state_dict())
             
-            # xm.master_print('===> Saving checkpoint')
-            # self.save_latest(epoch)
+            xm.master_print('===> Saving checkpoint')
+            self.save_latest(epoch)
             xm.rendezvous('all_collected')
 
         xm.master_print()
@@ -543,81 +514,43 @@ class model ():
         return rsl
 
     def eval(self, phase='val', openset=False, save_feat=False):
-        start = time.process_time()
         print_str = ['Phase: %s' % (phase)]
-        # print_write(print_str, self.log_file)
+        print_write(print_str, self.log_file)
         # time.sleep(0.25)
-        xm.master_print(19,time.process_time() - start)
-        start = time.process_time()
         if openset:
             xm.master_print('Under openset test mode. Open threshold is %.1f' 
                   % self.training_opt['open_threshold'])
-        xm.master_print(20,time.process_time() - start)
-        start = time.process_time()
         # torch.cuda.empty_cache()
-        gc.collect()
 
         # In validation or testing mode, set model to eval() and initialize running loss/correct
         for model in self.networks.values():
             model.to(self.device).eval()
-        xm.master_print(21,time.process_time() - start)
-        start = time.process_time()
         self.total_logits = torch.empty((0, self.training_opt['num_classes'])).to(self.device)
-        xm.master_print(22,time.process_time() - start)
-        start = time.process_time()
         self.total_labels = torch.empty(0, dtype=torch.long).to(self.device)
-        xm.master_print(23,time.process_time() - start)
-        start = time.process_time()
         self.total_paths = np.empty(0)
-        xm.master_print(24,time.process_time() - start)
-        start = time.process_time()
         get_feat_only = save_feat
-        xm.master_print(25,time.process_time() - start)
-        start = time.process_time()
         feats_all, labels_all, idxs_all, logits_all = [], [], [], []
-        xm.master_print(26,time.process_time() - start)
-        start = time.process_time()
         featmaps_all = []
-        xm.master_print(27,time.process_time() - start)
-        start = time.process_time()
         # Iterate over dataset
         para_loader = pl.ParallelLoader(self.data[phase], [self.device])
-        xm.master_print(28,time.process_time() - start)
-        start = time.process_time()
-        for inputs, labels, paths in para_loader.per_device_loader(self.device):
-            xm.master_print(29,time.process_time() - start)
-            start = time.process_time()
+        for inputs, labels, paths in tqdm(para_loader.per_device_loader(self.device)):
             inputs, labels = inputs.to(self.device), labels.to(self.device)
-            xm.master_print(30,time.process_time() - start)
-            start = time.process_time()
             # If on training phase, enable gradients
             with torch.set_grad_enabled(False):
-                xm.master_print(31,time.process_time() - start)
-                start = time.process_time()
                 # In validation or testing
                 self.batch_forward(inputs, labels, 
                                    centroids=self.memory['centroids'],
                                    phase=phase)
-                xm.master_print(32,time.process_time() - start)
-                start = time.process_time()
                 if not get_feat_only:
                     self.total_logits = torch.cat((self.total_logits, self.logits))
                     self.total_labels = torch.cat((self.total_labels, labels))
                     self.total_paths = np.concatenate((self.total_paths, paths.cpu().numpy()))
-                xm.master_print(33,time.process_time() - start)
-                start = time.process_time()
                 if get_feat_only:
                     logits_all.append(self.logits.cpu().numpy())
                     feats_all.append(self.features.cpu().numpy())
                     labels_all.append(labels.cpu().numpy())
                     idxs_all.append(paths.numpy())
-                xm.master_print(34,time.process_time() - start)
-                start = time.process_time()
                 del inputs, labels
-                gc.collect()
-            xm.master_print(35,time.process_time() - start)
-        # del para_loader
-        gc.collect()
         if get_feat_only:
             typ = 'feat'
             if phase == 'train_plain':
@@ -654,61 +587,59 @@ class model ():
                                             self.total_labels[self.total_labels != -1])
         self.eval_f_measure = F_measure(preds, self.total_labels, openset=openset,
                                         theta=self.training_opt['open_threshold'])
-        # self.many_acc_top1, \
-        # self.median_acc_top1, \
-        # self.low_acc_top1, \
-        # self.cls_accs = shot_acc(preds[self.total_labels != -1],
-        #                          self.total_labels[self.total_labels != -1], 
-        #                          self.data['train'],
-        #                          acc_per_cls=True)
-        xm.master_print(37,time.process_time() - start)
-        start = time.process_time()
+        self.many_acc_top1, \
+        self.median_acc_top1, \
+        self.low_acc_top1, \
+        self.cls_accs = shot_acc(preds[self.total_labels != -1],
+                                 self.total_labels[self.total_labels != -1], 
+                                 self.data['train'],
+                                 acc_per_cls=True)
         # Top-1 accuracy and additional string
-        # print_str = ['\n\n',
-        #              'Phase: %s' 
-        #              % (phase),
-        #              '\n\n',
-        #              'Evaluation_accuracy_micro_top1: %.3f' 
-        #              % (self.eval_acc_mic_top1),
-        #              '\n',
-        #              'Averaged F-measure: %.3f' 
-        #              % (self.eval_f_measure),
-                    #  '\n',
-                    #  'Many_shot_accuracy_top1: %.3f' 
-                    #  % (self.many_acc_top1),
-                    #  'Median_shot_accuracy_top1: %.3f' 
-                    #  % (self.median_acc_top1),
-                    #  'Low_shot_accuracy_top1: %.3f' 
-                    #  % (self.low_acc_top1),
-                    #  '\n']
+        print_str = ['\n\n',
+                     'Phase: %s' 
+                     % (phase),
+                     '\n\n',
+                     'Evaluation_accuracy_micro_top1: %.3f' 
+                     % (self.eval_acc_mic_top1),
+                     '\n',
+                     'Averaged F-measure: %.3f' 
+                     % (self.eval_f_measure),
+                     '\n',
+                     'Many_shot_accuracy_top1: %.3f' 
+                     % (self.many_acc_top1),
+                     'Median_shot_accuracy_top1: %.3f' 
+                     % (self.median_acc_top1),
+                     'Low_shot_accuracy_top1: %.3f' 
+                     % (self.low_acc_top1),
+                     '\n']
         
-        # rsl = {phase + '_all': self.eval_acc_mic_top1,
-        #        phase + '_many': self.many_acc_top1,
-        #        phase + '_median': self.median_acc_top1,
-        #        phase + '_low': self.low_acc_top1,
-        #        phase + '_fscore': self.eval_f_measure}
+        rsl = {phase + '_all': self.eval_acc_mic_top1,
+               phase + '_many': self.many_acc_top1,
+               phase + '_median': self.median_acc_top1,
+               phase + '_low': self.low_acc_top1,
+               phase + '_fscore': self.eval_f_measure}
 
-        # if phase == 'val':
-        #     xm.master_print(print_str)
-        #     xm.master_print(38,time.process_time() - start)
-        #     start = time.process_time()
-        # else:
-        #     acc_str = ["{:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(
-        #         self.many_acc_top1 * 100,
-        #         self.median_acc_top1 * 100,
-        #         self.low_acc_top1 * 100,
-        #         self.eval_acc_mic_top1 * 100)]
-        #     if self.log_file is not None and os.path.exists(self.log_file):
-        #         print_write(print_str, self.log_file)
-        #         print_write(acc_str, self.log_file)
-        #     else:
-        #         xm.master_print(*print_str)
-        #         xm.master_print(*acc_str)
+        if phase == 'val':
+            xm.master_print(print_str)
+            xm.master_print(38,time.process_time() - start)
+            start = time.process_time()
+        else:
+            acc_str = ["{:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(
+                self.many_acc_top1 * 100,
+                self.median_acc_top1 * 100,
+                self.low_acc_top1 * 100,
+                self.eval_acc_mic_top1 * 100)]
+            if self.log_file is not None and os.path.exists(self.log_file):
+                print_write(print_str, self.log_file)
+                print_write(acc_str, self.log_file)
+            else:
+                xm.master_print(*print_str)
+                xm.master_print(*acc_str)
         
-        # if phase == 'test':
-        #     with open(os.path.join(self.training_opt['log_dir'], 'cls_accs.pkl'), 'wb') as f:
-        #         pickle.dump(self.cls_accs, f)
-        # return rsl
+        if phase == 'test':
+            with open(os.path.join(self.training_opt['log_dir'], 'cls_accs.pkl'), 'wb') as f:
+                pickle.dump(self.cls_accs, f)
+        return rsl
             
     def centroids_cal(self, data, save_all=False):
 

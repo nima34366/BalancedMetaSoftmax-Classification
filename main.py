@@ -145,7 +145,12 @@ def split2phase(split):
     else:
         return split
 
-networks= init_models(config, test_mode, False)
+sampler_defs = training_opt['sampler']
+if sampler_defs and sampler_defs['type'] == 'MetaSampler':
+    networks= init_models(config, test_mode, True)
+else:
+    networks= init_models(config, test_mode, False)
+
 
 def distrib_train(rank, flags):
     device = xm.xla_device()
@@ -209,7 +214,7 @@ def distrib_train(rank, flags):
                                         num_workers=training_opt['num_workers'],
                                         cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None,
                                         meta=True)
-            training_model = model(config, data, device = device, test=False, meta_sample=True, learner=learner)
+            training_model = model(config, data, device = device, test=False, meta_sample=True, learner=learner, networks=networks)
         else:
             training_model = model(config, data, device = device, test=False, networks=networks)
 
