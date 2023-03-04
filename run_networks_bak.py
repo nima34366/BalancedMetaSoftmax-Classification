@@ -17,7 +17,7 @@ import copy
 import pickle
 import torch
 # import torch_xla
-import torch_xla.core.xla_model as xm
+# import torch_xla.core.xla_model as xm
 import torch_xla.debug.metrics as met
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_multiprocessing as xmp
@@ -34,14 +34,32 @@ import pdb
 import time
 import gc
 import higher
-from itertools import islice
 # import torch.profiler
 # import torch_xla.debug.profiler as xp
 
 
+class AverageMeter(object):
+
+    '''Computes and stores the average and current value'''
+    
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val   = 0
+        self.avg   = 0
+        self.sum   = 0
+        self.count = 0
+
+    def update(self, val, n = 1):
+        self.val    = val
+        self.sum   += val * n
+        self.count += n
+        self.avg    = self.sum / self.count
+
 class model ():
     
-    def __init__(self, config, data, device, networks, test=False, meta_sample=False, learner=None):
+    def __init__(self, config, data, device, test=False, meta_sample=False, learner=None):
 
         self.meta_sample = meta_sample
 
@@ -72,10 +90,8 @@ class model ():
         self.logger = Logger(self.training_opt['log_dir'])
         
         # Initialize model
-        self.networks = networks
-        self.init_params()
-        # self.init_models()
-        # self.model_optim_params_list = model_optim_params_list
+        self.init_models()
+
         # Load pre-trained model parameters
         if 'model_dir' in self.config and self.config['model_dir'] is not None:
             self.load_model(self.config['model_dir'])
@@ -88,9 +104,8 @@ class model ():
             # oversampled data number 
             xm.master_print('Using steps for training.')
             self.training_data_num = len(self.data['train'].dataset)
-            # xm.master_print(self.training_data_num, self.training_opt['batch_size'])
-            self.epoch_steps = int(self.training_data_num/self.training_opt['batch_size'])
-            xm.master_print('Num epoch steps', self.epoch_steps)
+            self.epoch_steps = int(self.training_data_num  \
+                                   / self.training_opt['batch_size'])
 
             # Initialize model optimizer and scheduler
             xm.master_print('Initializing model optimizer.')
@@ -119,26 +134,49 @@ class model ():
                     self.networks['classifier'].update(cfeats)
             self.log_file = None
         
-    def init_params(self):
-        self.model_optim_params_list = []
+    def init_models(self, optimizer=True):
         networks_defs = self.config['networks']
+        self.networks = {}
+        self.model_optim_params_list = []
+
+        if self.meta_sample:
+            # init meta optimizer
+            self.optimizer_meta = torch.optim.Adam(self.learner.parameters(),
+                                                   lr=self.training_opt['sampler'].get('lr', 0.01))
+
+        # xm.master_print("Using", torch.cuda.device_count(), "GPUs.")
+        
         for key, val in networks_defs.items():
 
-            self.networks[key] = self.networks[key].to(self.device)
+            # Networks
+            def_file = val['def_file']
+            # model_args = list(val['params'].values())
+            # model_args.append(self.test_mode)
+            model_args = val['params']
+            model_args.update({'test': self.test_mode})
+
+            self.networks[key] = source_import(def_file).create_model(**model_args)
+            if 'KNNClassifier' in type(self.networks[key]).__name__:
+                # Put the KNN classifier on one single GPU
+                self.networks[key] = self.networks[key].to(self.device)
+            else:
+                # self.networks[key] = nn.DataParallel(self.networks[key]).to(self.device)
+                self.networks[key] = xmp.MpModelWrapper(self.networks[key])
 
             if 'fix' in val and val['fix']:
                 xm.master_print('Freezing feature weights except for self attention weights (if exist).')
-            for param_name, param in self.networks[key].named_parameters():
-                # Freeze all parameters except self attention parameters
-                if 'selfatt' not in param_name and 'fc' not in param_name:
-                    param.requires_grad = False
-            # xm.master_print('  | ', param_name, param.requires_grad)
+                for param_name, param in self.networks[key].named_parameters():
+                    # Freeze all parameters except self attention parameters
+                    if 'selfatt' not in param_name and 'fc' not in param_name:
+                        param.requires_grad = False
+                    # xm.master_print('  | ', param_name, param.requires_grad)
 
             if self.meta_sample and key!='classifier':
                 # avoid adding classifier parameters to the optimizer,
                 # otherwise error will be raised when computing higher gradients
                 continue
 
+            # Optimizer list
             optim_params = val['optim_params']
             self.model_optim_params_list.append({'params': self.networks[key].parameters(),
                                                 'lr': optim_params['lr'],
@@ -172,11 +210,6 @@ class model ():
 
     def init_optimizers(self, optim_params):
         optimizer = optim.SGD(optim_params)
-
-        if self.meta_sample:
-            # init meta optimizer
-            self.optimizer_meta = torch.optim.Adam(self.learner.parameters(),
-                                                   lr=self.training_opt['sampler'].get('lr', 0.01))
         if self.config['coslr']:
             xm.master_print("===> Using coslr eta_min={}".format(self.config['endlr']))
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -198,16 +231,16 @@ class model ():
                                                   gamma=self.scheduler_params['gamma'])
         return optimizer, scheduler
 
-    def batch_forward (self, inputs, labels=None, centroids=False, feature_ext=False, phase='train'):
+    def batch_forward (self, inputs,model_optimizer, criterion_optimizer, networks, labels=None, centroids=False, feature_ext=False, phase='train'):
         '''
         This is a general single batch running function. 
         '''
-        self.model_optimizer.zero_grad()
-        if self.criterion_optimizer:
-            self.criterion_optimizer.zero_grad()
+        model_optimizer.zero_grad()
+        if criterion_optimizer:
+            criterion_optimizer.zero_grad()
 
         # Calculate Features
-        self.features, self.feature_maps = self.networks['feat_model'](inputs)
+        features, feature_maps = networks['feat_model'](inputs)
 
         # If not just extracting features, calculate logits
         if not feature_ext:
@@ -227,6 +260,7 @@ class model ():
 
             # Calculate logits with classifier
             self.logits, self.direct_memory_feature = self.networks['classifier'](self.features, centroids_)
+        return features, feature_maps
 
     def batch_backward(self):
         # Zero out optimizer gradients
@@ -234,10 +268,13 @@ class model ():
         self.loss.backward()
         # Step optimizers
         # self.model_optimizer.step()
-        xm.optimizer_step(self.model_optimizer, barrier=False)
+        xm.optimizer_step(self.model_optimizer, barrier=True)
+        # trn_loss_meter.update(loss.detach().item(), inputs.size(0))
         # xm.mark_step()
         if self.criterion_optimizer:
-            xm.optimizer_step(self.criterion_optimizer, barrier=False)
+            xm.optimizer_step(self.criterion_optimizer, barrier=True)
+        
+        
 
     def batch_loss(self, labels):
         self.loss = 0
@@ -318,138 +355,137 @@ class model ():
         end_epoch = self.training_opt['num_epochs']
 
         # Loop over epochs
-        xm.rendezvous('init')
-        start = time.time()
-        # para_loader = self.data['train']
         for epoch in range(1, end_epoch + 1):
-            xm.master_print('Time for epoch',epoch,time.time() - start)
-            start = time.time()
-            xm.master_print(1)
-            para_loader = pl.ParallelLoader(self.data['train'], [self.device])
+            def train_fn(epoch, para_loader, optimizer, criterion, scheduler, device):
             # self.data['train'].sampler.set_epoch(epoch)
-            xm.master_print(2)
-            for model in self.networks.values():
-                model.train()
-            xm.master_print(3)
-
-            # torch.cuda.empty_cache()
-            # gc.collect()
-            # Set model modes and set scheduler
-            # In training, step optimizer scheduler and set model to train() 
-            xm.master_print(6)
-            # Iterate over dataset
-            # total_preds = []
-            # total_labels = []
-            xm.master_print(8)
-            # prof = torch.profiler.profile(
-            #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
-            #     on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/wickramasinghenlssck/BalancedMetaSoftmax-Classification/logs/tens'),
-            #     record_shapes=True,
-            #     with_stack=True)
-            # prof.start()
-            xm.master_print(self.epoch_steps)
-            for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device)):
-            # for step, (inputs, labels, indexes) in enumerate(para_loader):
-                # Break when step equal to epoch step
-                # with xp.StepTrace('train_loop', step_num=step):
-                xm.master_print(9)
-                # if step == self.epoch_steps:
-                #     break
-                # if self.do_shuffle:
-                #     inputs, labels = self.shuffle_batch(inputs, labels)
-                inputs, labels = inputs.to(self.device), labels.to(self.device)
-                xm.master_print(10)
-                # If on training phase, enable gradients
-                # with torch.set_grad_enabled(True):
-                if self.meta_sample:
-                    # do inner loop
-                    self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
-                xm.master_print(11)
-                # If training, forward with loss, and no top 5 accuracy calculation
-                self.batch_forward(inputs, labels, 
-                                centroids=self.memory['centroids'],
-                                phase='train')
-                xm.master_print(12)
-                self.batch_loss(labels)
-                self.batch_backward()
-                xm.master_print(13)
-                # Tracking predictions
-                # _, preds = torch.max(self.logits, 1)
-                # total_preds.append(torch2numpy(preds))
-                # total_labels.append(torch2numpy(labels))
-                xm.master_print(14)
-                # Output minibatch training results
-                # if step % self.training_opt['display_step'] == 0:
-
-                #     minibatch_loss_feat = self.loss_feat.item() \
-                #         if 'FeatureLoss' in self.criterions.keys() else None
-                #     minibatch_loss_perf = self.loss_perf.item() \
-                #         if 'PerformanceLoss' in self.criterions else None
-                #     minibatch_loss_total = self.loss.item()
-                #     minibatch_acc = mic_acc_cal(preds, labels)
-
-                #     print_str = ['Epoch: [%d/%d]' 
-                #                 % (epoch, self.training_opt['num_epochs']),
-                #                 'Step: %5d' 
-                #                 % (step),
-                #                 'Minibatch_loss_feature: %.3f' 
-                #                 % (minibatch_loss_feat) if minibatch_loss_feat else '',
-                #                 'Minibatch_loss_performance: %.3f'
-                #                 % (minibatch_loss_perf) if minibatch_loss_perf else '',
-                #                 'Minibatch_accuracy_micro: %.3f'
-                #                 % (minibatch_acc)]
-                #     print_write(print_str, self.log_file)
-
-                #     loss_info = {
-                #         'Epoch': epoch,
-                #         'Step': step,
-                #         'Total': minibatch_loss_total,
-                #         'CE': minibatch_loss_perf,
-                #         'feat': minibatch_loss_feat
-                #     }
-
-                # del inputs,labels
-                # del inputs,labels, self.logits, self.direct_memory_feature, self.centroids, self.features, self.feature_maps, self.loss, self.loss_perf
-
+                print(1)
+                # para_loader = pl.ParallelLoader(self.data['train'], [self.device])
+                print(2)
+                for model in self.networks.values():
+                    model.train()
+                print(3)
+                trn_loss_meter = AverageMeter()
+                # torch.cuda.empty_cache()
                 # gc.collect()
-                xm.master_print(15)
-                            # xm.master_print(met.metrics_report())
-                            # self.logger.log_loss(loss_info)
+                # Set model modes and set scheduler
+                # In training, step optimizer scheduler and set model to train() 
+                print(6)
+                # Iterate over dataset
+                # total_preds = []
+                # total_labels = []
+                print(8)
+                # prof = torch.profiler.profile(
+                #     schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+                #     on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/wickramasinghenlssck/BalancedMetaSoftmax-Classification/logs/tens'),
+                #     record_shapes=True,
+                #     with_stack=True)
+                # prof.start()
+                
+                for step, (inputs, labels, indexes) in enumerate(para_loader):
+                    # Break when step equal to epoch step
+                    # with xp.StepTrace('train_loop', step_num=step):
+                    print(9)
+                    if step == self.epoch_steps:
+                        break
+                    # if self.do_shuffle:
+                    #     inputs, labels = self.shuffle_batch(inputs, labels)
+                    inputs, labels = inputs.to(device), labels.to(device)
+                    print(10)
+                    # If on training phase, enable gradients
+                    # with torch.set_grad_enabled(True):
+                    if self.meta_sample:
+                        # do inner loop
+                        self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
+                    print(11)
+                    # If training, forward with loss, and no top 5 accuracy calculation
+                    self.batch_forward(inputs, labels, 
+                                    centroids=self.memory['centroids'],
+                                    phase='train')
+                    print(12)
+                    # self.batch_loss(labels)
+                    self.batch_backward()
+                    print(13)
+                    trn_loss_meter.update(self.loss.detach().item(), inputs.size(0))
+                    # Tracking predictions
+                    # _, preds = torch.max(self.logits, 1)
+                    # total_preds.append(torch2numpy(preds))
+                    # total_labels.append(torch2numpy(labels))
+                    print(14)
+                    # Output minibatch training results
+                    if step % self.training_opt['display_step'] == 0:
 
-                    # Update priority weights if using PrioritizedSampler
-                    # if self.training_opt['sampler'] and \
-                    #    self.training_opt['sampler']['type'] == 'PrioritizedSampler':
-                    # if hasattr(self.data['train'].sampler, 'update_weights'):
-                    #     if hasattr(self.data['train'].sampler, 'ptype'):
-                    #         ptype = self.data['train'].sampler.ptype 
-                    #     else:
-                    #         ptype = 'score'
-                    #     ws = get_priority(ptype, self.logits.detach(), labels)
-                    #     # ws = logits2score(self.logits.detach(), labels)
-                    #     inlist = [indexes.cpu().numpy(), ws]
-                    #     if self.training_opt['sampler']['type'] == 'ClassPrioritySampler':
-                    #         inlist.append(labels.cpu().numpy())
-                    #     self.data['train'].sampler.update_weights(*inlist)
-                        # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
-                xm.rendezvous('step')
+                        minibatch_loss_feat = self.loss_feat.item() \
+                            if 'FeatureLoss' in self.criterions.keys() else None
+                        minibatch_loss_perf = self.loss_perf.item() \
+                            if 'PerformanceLoss' in self.criterions else None
+                        minibatch_loss_total = self.loss.item()
+                        minibatch_acc = mic_acc_cal(preds, labels)
+
+                        print_str = ['Epoch: [%d/%d]' 
+                                    % (epoch, self.training_opt['num_epochs']),
+                                    'Step: %5d' 
+                                    % (step),
+                                    'Minibatch_loss_feature: %.3f' 
+                                    % (minibatch_loss_feat) if minibatch_loss_feat else '',
+                                    'Minibatch_loss_performance: %.3f'
+                                    % (minibatch_loss_perf) if minibatch_loss_perf else '',
+                                    'Minibatch_accuracy_micro: %.3f'
+                                    % (minibatch_acc)]
+                        print_write(print_str, self.log_file)
+
+                        loss_info = {
+                            'Epoch': epoch,
+                            'Step': step,
+                            'Total': minibatch_loss_total,
+                            'CE': minibatch_loss_perf,
+                            'feat': minibatch_loss_feat
+                        }
+
+                    del inputs,labels, self.logits, self.direct_memory_featur, self.centroids, centroids_, self.features, self.feature_maps, self.loss
+                    gc.collect()
+                    return trn_loss_meter.avg
+                    print(15)
+                                # xm.master_print(met.metrics_report())
+                                # self.logger.log_loss(loss_info)
+
+                        # Update priority weights if using PrioritizedSampler
+                        # if self.training_opt['sampler'] and \
+                        #    self.training_opt['sampler']['type'] == 'PrioritizedSampler':
+                        # if hasattr(self.data['train'].sampler, 'update_weights'):
+                        #     if hasattr(self.data['train'].sampler, 'ptype'):
+                        #         ptype = self.data['train'].sampler.ptype 
+                        #     else:
+                        #         ptype = 'score'
+                        #     ws = get_priority(ptype, self.logits.detach(), labels)
+                        #     # ws = logits2score(self.logits.detach(), labels)
+                        #     inlist = [indexes.cpu().numpy(), ws]
+                        #     if self.training_opt['sampler']['type'] == 'ClassPrioritySampler':
+                        #         inlist.append(labels.cpu().numpy())
+                        #     self.data['train'].sampler.update_weights(*inlist)
+                            # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
             # prof.stop()
             # if hasattr(self.data['train'].sampler, 'get_weights'):
             #     self.logger.log_ws(epoch, self.data['train'].sampler.get_weights())
             # if hasattr(self.data['train'].sampler, 'reset_weights'):
             #     self.data['train'].sampler.reset_weights(epoch)
-            self.model_optimizer_scheduler.step()
-            xm.master_print(5)
-            if self.criterion_optimizer:
-                self.criterion_optimizer_scheduler.step()
-            # del indexes
-            # gc.collect()
+                self.model_optimizer_scheduler.step()
+                print(5)
+                if self.criterion_optimizer:
+                    self.criterion_optimizer_scheduler.step()
+                del para_loader, indexes
+                gc.collect()
             # After every epoch, validation
-            xm.master_print(16)
+            print(16)
+
+            def _run(model):
+                device = xm.xla_device()
+                for model in self.networks.values():
+                    model.to(device)
             # rsls = {'epoch': epoch}
-            xm.master_print(17)
+            print(17)
             # rsls_train = self.eval_with_preds(total_preds, total_labels)
             # rsls_eval = self.eval(phase='val')
-            xm.master_print(18)
+            print(18)
             # rsls.update(rsls_train)
             # rsls.update(rsls_eval)
 
@@ -473,7 +509,7 @@ class model ():
             
             # xm.master_print('===> Saving checkpoint')
             # self.save_latest(epoch)
-            xm.rendezvous('all_collected')
+            
 
         xm.master_print()
         xm.master_print('Training Complete.')
@@ -547,12 +583,12 @@ class model ():
         print_str = ['Phase: %s' % (phase)]
         # print_write(print_str, self.log_file)
         # time.sleep(0.25)
-        xm.master_print(19,time.process_time() - start)
+        print(19,time.process_time() - start)
         start = time.process_time()
         if openset:
             xm.master_print('Under openset test mode. Open threshold is %.1f' 
                   % self.training_opt['open_threshold'])
-        xm.master_print(20,time.process_time() - start)
+        print(20,time.process_time() - start)
         start = time.process_time()
         # torch.cuda.empty_cache()
         gc.collect()
@@ -560,63 +596,63 @@ class model ():
         # In validation or testing mode, set model to eval() and initialize running loss/correct
         for model in self.networks.values():
             model.to(self.device).eval()
-        xm.master_print(21,time.process_time() - start)
+        print(21,time.process_time() - start)
         start = time.process_time()
         self.total_logits = torch.empty((0, self.training_opt['num_classes'])).to(self.device)
-        xm.master_print(22,time.process_time() - start)
+        print(22,time.process_time() - start)
         start = time.process_time()
         self.total_labels = torch.empty(0, dtype=torch.long).to(self.device)
-        xm.master_print(23,time.process_time() - start)
+        print(23,time.process_time() - start)
         start = time.process_time()
         self.total_paths = np.empty(0)
-        xm.master_print(24,time.process_time() - start)
+        print(24,time.process_time() - start)
         start = time.process_time()
         get_feat_only = save_feat
-        xm.master_print(25,time.process_time() - start)
+        print(25,time.process_time() - start)
         start = time.process_time()
         feats_all, labels_all, idxs_all, logits_all = [], [], [], []
-        xm.master_print(26,time.process_time() - start)
+        print(26,time.process_time() - start)
         start = time.process_time()
         featmaps_all = []
-        xm.master_print(27,time.process_time() - start)
+        print(27,time.process_time() - start)
         start = time.process_time()
         # Iterate over dataset
         para_loader = pl.ParallelLoader(self.data[phase], [self.device])
-        xm.master_print(28,time.process_time() - start)
+        print(28,time.process_time() - start)
         start = time.process_time()
         for inputs, labels, paths in para_loader.per_device_loader(self.device):
-            xm.master_print(29,time.process_time() - start)
+            print(29,time.process_time() - start)
             start = time.process_time()
             inputs, labels = inputs.to(self.device), labels.to(self.device)
-            xm.master_print(30,time.process_time() - start)
+            print(30,time.process_time() - start)
             start = time.process_time()
             # If on training phase, enable gradients
             with torch.set_grad_enabled(False):
-                xm.master_print(31,time.process_time() - start)
+                print(31,time.process_time() - start)
                 start = time.process_time()
                 # In validation or testing
                 self.batch_forward(inputs, labels, 
                                    centroids=self.memory['centroids'],
                                    phase=phase)
-                xm.master_print(32,time.process_time() - start)
+                print(32,time.process_time() - start)
                 start = time.process_time()
                 if not get_feat_only:
                     self.total_logits = torch.cat((self.total_logits, self.logits))
                     self.total_labels = torch.cat((self.total_labels, labels))
                     self.total_paths = np.concatenate((self.total_paths, paths.cpu().numpy()))
-                xm.master_print(33,time.process_time() - start)
+                print(33,time.process_time() - start)
                 start = time.process_time()
                 if get_feat_only:
                     logits_all.append(self.logits.cpu().numpy())
                     feats_all.append(self.features.cpu().numpy())
                     labels_all.append(labels.cpu().numpy())
                     idxs_all.append(paths.numpy())
-                xm.master_print(34,time.process_time() - start)
+                print(34,time.process_time() - start)
                 start = time.process_time()
                 del inputs, labels
                 gc.collect()
-            xm.master_print(35,time.process_time() - start)
-        # del para_loader
+            print(35,time.process_time() - start)
+        del para_loader
         gc.collect()
         if get_feat_only:
             typ = 'feat'
@@ -637,7 +673,7 @@ class model ():
                             },
                             f, protocol=4) 
             return 
-        xm.master_print(35,time.process_time() - start)
+        print(35,time.process_time() - start)
         start = time.process_time()
         probs, preds = F.softmax(self.total_logits.detach(), dim=1).max(dim=1)
 
@@ -648,7 +684,7 @@ class model ():
             xm.master_print('\n\nOpenset Accuracy: %.3f' % self.openset_acc)
 
         # Calculate the overall accuracy and F measurement
-        xm.master_print(36,time.process_time() - start)
+        print(36,time.process_time() - start)
         start = time.process_time()
         self.eval_acc_mic_top1= mic_acc_cal(preds[self.total_labels != -1],
                                             self.total_labels[self.total_labels != -1])
@@ -661,7 +697,7 @@ class model ():
         #                          self.total_labels[self.total_labels != -1], 
         #                          self.data['train'],
         #                          acc_per_cls=True)
-        xm.master_print(37,time.process_time() - start)
+        print(37,time.process_time() - start)
         start = time.process_time()
         # Top-1 accuracy and additional string
         # print_str = ['\n\n',
@@ -689,8 +725,8 @@ class model ():
         #        phase + '_fscore': self.eval_f_measure}
 
         # if phase == 'val':
-        #     xm.master_print(print_str)
-        #     xm.master_print(38,time.process_time() - start)
+        #     print(print_str)
+        #     print(38,time.process_time() - start)
         #     start = time.process_time()
         # else:
         #     acc_str = ["{:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(

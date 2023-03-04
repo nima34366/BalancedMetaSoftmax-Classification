@@ -11,6 +11,12 @@ this source tree.
 Copyright (c) 2019, Zhongqi Miao
 All rights reserved.
 """
+
+import os
+os.environ['XRT_TPU_CONFIG'] = "localservice;0;localhost:51011"
+os.environ['XLA_USE_BF16']                 = '1'
+os.environ['XLA_TENSOR_ALLOCATOR_MAXSIZE'] = '1000000000'
+
 import torch
 import torch_xla
 import torch_xla.core.xla_model as xm
@@ -81,6 +87,35 @@ def update(config, args):
     
     return config
 
+def init_models(config, test_mode, meta_sample):
+    networks_defs = config['networks']
+    networks = {}
+
+
+    # xm.master_print("Using", torch.cuda.device_count(), "GPUs.")
+    
+    for key, val in networks_defs.items():
+
+        # Networks
+        def_file = val['def_file']
+        # model_args = list(val['params'].values())
+        # model_args.append(self.test_mode)
+        model_args = val['params']
+        model_args.update({'test': test_mode})
+
+        networks[key] = source_import(def_file).create_model(**model_args)
+        if 'KNNClassifier' in type(networks[key]).__name__:
+            # Put the KNN classifier on one single GPU
+            networks[key] = networks[key] ####
+        else:
+            # networks[key] = nn.DataParallel(networks[key]).to(device)
+            networks[key] = xmp.MpModelWrapper(networks[key])
+
+
+
+        # Optimizer list
+        
+    return networks
 
 
 # ============================================================================
@@ -110,9 +145,14 @@ def split2phase(split):
     else:
         return split
 
+networks= init_models(config, test_mode, False)
+
 def distrib_train(rank, flags):
     device = xm.xla_device()
-    torch.set_default_tensor_type('torch.FloatTensor')
+    # torch.set_default_tensor_type('torch.FloatTensor')
+    os.environ["WORLD_SIZE"] = str(xm.xrt_world_size())
+    os.environ["RANK"] = str(xm.get_ordinal())
+
     if not test_mode:
 
         sampler_defs = training_opt['sampler']
@@ -134,7 +174,7 @@ def distrib_train(rank, flags):
                     num_classes=training_opt['num_classes'],
                     init_pow=sampler_defs.get('init_pow', 0.0),
                     freq_path=sampler_defs.get('freq_path', None)
-                ).to(device)
+                )
                 sampler_dic = {
                     'batch_sampler': True,
                     'sampler': source_import(sampler_defs['def_file']).get_sampler(),
@@ -171,7 +211,7 @@ def distrib_train(rank, flags):
                                         meta=True)
             training_model = model(config, data, device = device, test=False, meta_sample=True, learner=learner)
         else:
-            training_model = model(config, data, device = device, test=False)
+            training_model = model(config, data, device = device, test=False, networks=networks)
 
         training_model.train()
 
@@ -205,7 +245,7 @@ def distrib_train(rank, flags):
                                         cifar_imb_ratio=training_opt['cifar_imb_ratio'] if 'cifar_imb_ratio' in training_opt else None)
                 for x in splits}
         
-        training_model = model(config, data, device = device, test=True)
+        training_model = model(config, data, device = device, test=True, networks=networks)
         # training_model.load_model()
         training_model.load_model(args.model_dir)
         if args.save_feat in ['train_plain', 'val', 'test']:
