@@ -18,7 +18,7 @@ import pickle
 import torch
 # import torch_xla
 import torch_xla.core.xla_model as xm
-import torch_xla.debug.metrics as met
+# import torch_xla.debug.metrics as met
 import torch_xla.distributed.parallel_loader as pl
 import torch_xla.distributed.xla_multiprocessing as xmp
 import torch.nn as nn
@@ -84,6 +84,7 @@ class model ():
             # oversampled data number 
             xm.master_print('Using steps for training.')
             self.training_data_num = len(self.data['train'].dataset)
+            self.batch_size = self.training_opt['batch_size']
             self.epoch_steps = int(self.training_data_num/self.training_opt['batch_size'])
             xm.master_print('Num epoch steps', self.epoch_steps)
 
@@ -308,7 +309,7 @@ class model ():
         best_model_weights['classifier'] = copy.deepcopy(self.networks['classifier'].state_dict())
         best_acc = 0.0
         best_epoch = 0
-        best_centroids = self.centroids
+        # best_centroids = self.centroids
 
         end_epoch = self.training_opt['num_epochs']
 
@@ -316,11 +317,11 @@ class model ():
         xm.rendezvous('init')
         start = time.time()
         # para_loader = self.data['train']
-        for epoch in range(1, end_epoch + 1):
+        for epoch in range(0, end_epoch):
             xm.master_print('Time for epoch',epoch,time.time() - start)
             start = time.time()
             para_loader = pl.ParallelLoader(self.data['train'], [self.device])
-            self.data['train'].sampler.set_epoch(epoch)
+            # self.data['train'].sampler.set_epoch(epoch)
             for model in self.networks.values():
                 model.train()
 
@@ -329,32 +330,48 @@ class model ():
             # Set model modes and set scheduler
             # In training, step optimizer scheduler and set model to train() 
             # Iterate over dataset
-            total_preds = []
-            total_labels = []
+            # total_preds = []
+            # total_labels = []
+            total_preds = torch.empty((self.epoch_steps, self.batch_size))
+            total_labels = torch.empty((self.epoch_steps, self.batch_size))
             xm.master_print(self.epoch_steps)
             for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device)):
             # for step, (inputs, labels, indexes) in enumerate(para_loader):
                 # Break when step equal to epoch step
+                print('start')
                 if step == self.epoch_steps:
                     break
                 # if self.do_shuffle:
                 #     inputs, labels = self.shuffle_batch(inputs, labels)
+                print('send tpu')
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
+                print('done tpu')
                 # If on training phase, enable gradients
                 # with torch.set_grad_enabled(True):
                 if self.meta_sample:
                     # do inner loop
                     self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
                 # If training, forward with loss, and no top 5 accuracy calculation
+                print(1)
                 self.batch_forward(inputs, labels, 
                                 centroids=self.memory['centroids'],
                                 phase='train')
+                print(2)
                 self.batch_loss(labels)
+                print(3)
                 self.batch_backward()
+                print(4)
                 # Tracking predictions
                 _, preds = torch.max(self.logits, 1)
-                total_preds.append(torch2numpy(preds))
-                total_labels.append(torch2numpy(labels))
+                print(40)
+                # total_preds.append(torch2numpy(preds))
+                print(preds.shape, total_preds.shape)
+                print(labels.shape, total_labels.shape)
+                total_preds[step] = preds
+                print(41)
+                # total_labels.append(torch2numpy(labels))
+                total_labels[step] = labels
+                print(42)
                 # Output minibatch training results
                 if step % self.training_opt['display_step'] == 0:
 
@@ -389,12 +406,13 @@ class model ():
                 # del inputs,labels, self.logits, self.direct_memory_feature, self.centroids, self.features, self.feature_maps, self.loss, self.loss_perf
 
                 # gc.collect()
-                    xm.master_print(met.metrics_report())
+                    # xm.master_print(met.metrics_report())
                     self.logger.log_loss(loss_info)
 
                 # Update priority weights if using PrioritizedSampler
                 # if self.training_opt['sampler'] and \
                 #    self.training_opt['sampler']['type'] == 'PrioritizedSampler':
+                print(6)
                 if hasattr(self.data['train'].sampler, 'update_weights'):
                     if hasattr(self.data['train'].sampler, 'ptype'):
                         ptype = self.data['train'].sampler.ptype 
@@ -407,7 +425,9 @@ class model ():
                         inlist.append(labels.cpu().numpy())
                     self.data['train'].sampler.update_weights(*inlist)
                     # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
+                print(7)
                 xm.rendezvous('step')
+                print('done')
             if hasattr(self.data['train'].sampler, 'get_weights'):
                 self.logger.log_ws(epoch, self.data['train'].sampler.get_weights())
             if hasattr(self.data['train'].sampler, 'reset_weights'):
@@ -460,6 +480,8 @@ class model ():
         xm.master_print('Done')
     
     def eval_with_preds(self, preds, labels):
+        preds = preds.tolist()
+        labels = labels.tolist()
         # Count the number of examples
         n_total = sum([len(p) for p in preds])
 
@@ -534,6 +556,7 @@ class model ():
         # Iterate over dataset
         para_loader = pl.ParallelLoader(self.data[phase], [self.device])
         for inputs, labels, paths in tqdm(para_loader.per_device_loader(self.device)):
+            print('start eval')
             inputs, labels = inputs.to(self.device), labels.to(self.device)
             # If on training phase, enable gradients
             with torch.set_grad_enabled(False):
@@ -550,7 +573,9 @@ class model ():
                     feats_all.append(self.features.cpu().numpy())
                     labels_all.append(labels.cpu().numpy())
                     idxs_all.append(paths.numpy())
-                del inputs, labels
+                # del inputs, labels
+            print('done eval')
+            
         if get_feat_only:
             typ = 'feat'
             if phase == 'train_plain':
@@ -570,8 +595,6 @@ class model ():
                             },
                             f, protocol=4) 
             return 
-        xm.master_print(35,time.process_time() - start)
-        start = time.process_time()
         probs, preds = F.softmax(self.total_logits.detach(), dim=1).max(dim=1)
 
         if openset:
@@ -581,8 +604,6 @@ class model ():
             xm.master_print('\n\nOpenset Accuracy: %.3f' % self.openset_acc)
 
         # Calculate the overall accuracy and F measurement
-        xm.master_print(36,time.process_time() - start)
-        start = time.process_time()
         self.eval_acc_mic_top1= mic_acc_cal(preds[self.total_labels != -1],
                                             self.total_labels[self.total_labels != -1])
         self.eval_f_measure = F_measure(preds, self.total_labels, openset=openset,
@@ -621,8 +642,6 @@ class model ():
 
         if phase == 'val':
             xm.master_print(print_str)
-            xm.master_print(38,time.process_time() - start)
-            start = time.process_time()
         else:
             acc_str = ["{:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(
                 self.many_acc_top1 * 100,

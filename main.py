@@ -190,7 +190,7 @@ def distrib_train(rank, flags):
 
         splits = ['train', 'train_plain', 'val']
         # if dataset not in ['iNaturalist18', 'ImageNet']:
-        if dataset not in ['iNaturalist18']:
+        if dataset not in ['iNaturalist18', 'ImageNet_LT']:
             splits.append('test')
         data = {x: dataloader.load_data(data_root=data_root[dataset.rstrip('_LT')],
                                         dataset=dataset, phase=split2phase(x), 
@@ -264,6 +264,7 @@ def distrib_train(rank, flags):
         if output_logits:
             training_model.output_logits(openset=test_open)
         
-xmp.spawn(distrib_train, args=({},), nprocs=1, start_method='fork')
+if __name__ == "__main__":
+    xmp.spawn(distrib_train, args=({},), nprocs=1, start_method='fork')
 
 print('ALL COMPLETED.')

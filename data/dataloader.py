@@ -24,6 +24,8 @@ from data.ImbalanceCIFAR import IMBALANCECIFAR10, IMBALANCECIFAR100
 from torch.utils.data import DistributedSampler
 from typing import Optional, Iterator, Union
 from webdataset import WebDataset, ShardWriter, WebLoader
+import numpy as np
+from tqdm import tqdm
 
 
 
@@ -274,45 +276,46 @@ class MMAPDataset(Dataset):
                 json.dump(self.img_num_per_cls, fd)
 
         path = self.img_path[0]
-        label = self.labels[0]
+        label = np.int32(self.labels[0])
         with open(path, 'rb') as f:
             sample = Image.open(f).convert('RGB')
-            # sample = f.read()
         if self.transform is not None:
             sample = self.transform(sample)
+            sample = sample.numpy()
         
         if self.xm.is_master_ordinal():
             if txt_split not in os.listdir(root+'/'+dataset):
                 os.mkdir(root+'/'+dataset+'/'+txt_split)
-                self.mmap_samples = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'samples', sample.dtype, (len(self.labels), *sample.shape))
-                self.mmap_labels = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'labels', label.dtype, (len(self.labels), *label.shape))
-                for i in range(len(self.labels)):
+                self.mmap_samples = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'samples.dat', sample.dtype, (len(self.labels), *sample.shape))
+                self.mmap_labels = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'labels.dat', label.dtype, (len(self.labels), *label.shape))
+                for i in tqdm(range(len(self.labels)), desc = 'creating memmap'):
                     path = self.img_path[i]
-                    label = self.labels[i]
+                    label = np.int32(self.labels[i])
                     with open(path, 'rb') as f:
                         sample = Image.open(f).convert('RGB')
-                        # sample = f.read()
-                    self.mmap_samples[i][:] = sample
-                    self.mmap_labels[i][:] = label
+                    if self.transform is not None:
+                        sample = self.transform(sample)
+                        sample = sample.numpy()
+                    self.mmap_samples[i] = sample
+                    self.mmap_labels[i] = label
+            else:
+                self.mmap_samples = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'samples.dat', sample.dtype, (len(self.labels), *sample.shape), use_existing=True)
+                self.mmap_labels = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'labels.dat', label.dtype, (len(self.labels), *label.shape), use_existing=True)
         self.xm.rendezvous('Creating memmap')
 
-    def __getitem__(self, idx: int) -> Tuple[Union[np.ndarray, torch.Tensor]]:
-        sample = self.mmap_inputs[idx]
+    def __getitem__(self, idx: int):
+        sample = torch.tensor(self.mmap_samples[idx])
         label = torch.tensor(self.mmap_labels[idx])
-        if self.transform is not None:
-            sample = self.transform(sample)
-
         return sample, label, idx
-
 
     def __len__(self) -> int:
         return len(self.labels)
 
-    def _init_mmap(self, path: str, dtype: np.dtype, shape: Tuple[int], remove_existing: bool = False) -> np.ndarray:
-        open_mode = "r+"
+    def _init_mmap(self, path: str, dtype: np.dtype, shape, use_existing = False) -> np.ndarray:
+        open_mode = "w+"
 
-        if remove_existing:
-            open_mode = "w+"
+        if use_existing:
+            open_mode = "r"
         
         return np.memmap(
             path,
@@ -411,7 +414,7 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
         # return DataLoader(dataset=set_, batch_size=None, num_workers=num_workers, prefetch_factor=8)
         # return set_
         # return DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=32, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
-        return DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=16)
-        # return DataLoader(dataset=set_, batch_size=None, num_workers=num_workers, drop_last=True, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=False))
+        # return DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=16)
+        return DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=16, drop_last=True, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=False))
 
 
