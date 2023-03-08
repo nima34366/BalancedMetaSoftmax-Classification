@@ -249,6 +249,78 @@ class LT_Dataset(Dataset):
 
         return sample, label, index
 
+class MMAPDataset(Dataset):
+    def __init__(self, root, txt, dataset,txt_split, transform=None, meta=False):
+        super().__init__()
+        self.img_path = []
+        self.labels = []
+        self.transform = transform
+        self.xm = xm
+
+        with open(txt) as f:
+            for line in f:
+                self.img_path.append(os.path.join(root, line.split()[0]))
+                self.labels.append(int(line.split()[1]))
+
+        # save the class frequency
+        if 'train' in txt and not meta:
+            if not os.path.exists('cls_freq'):
+                os.makedirs('cls_freq')
+            freq_path = os.path.join('cls_freq', dataset + '.json')
+            self.img_num_per_cls = [0 for _ in range(max(self.labels)+1)]
+            for cls in self.labels:
+                self.img_num_per_cls[cls] += 1
+            with open(freq_path, 'w') as fd:
+                json.dump(self.img_num_per_cls, fd)
+
+        path = self.img_path[0]
+        label = self.labels[0]
+        with open(path, 'rb') as f:
+            sample = Image.open(f).convert('RGB')
+            # sample = f.read()
+        if self.transform is not None:
+            sample = self.transform(sample)
+        
+        if self.xm.is_master_ordinal():
+            if txt_split not in os.listdir(root+'/'+dataset):
+                os.mkdir(root+'/'+dataset+'/'+txt_split)
+                self.mmap_samples = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'samples', sample.dtype, (len(self.labels), *sample.shape))
+                self.mmap_labels = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'labels', label.dtype, (len(self.labels), *label.shape))
+                for i in range(len(self.labels)):
+                    path = self.img_path[i]
+                    label = self.labels[i]
+                    with open(path, 'rb') as f:
+                        sample = Image.open(f).convert('RGB')
+                        # sample = f.read()
+                    self.mmap_samples[i][:] = sample
+                    self.mmap_labels[i][:] = label
+        self.xm.rendezvous('Creating memmap')
+
+    def __getitem__(self, idx: int) -> Tuple[Union[np.ndarray, torch.Tensor]]:
+        sample = self.mmap_inputs[idx]
+        label = torch.tensor(self.mmap_labels[idx])
+        if self.transform is not None:
+            sample = self.transform(sample)
+
+        return sample, label, idx
+
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def _init_mmap(self, path: str, dtype: np.dtype, shape: Tuple[int], remove_existing: bool = False) -> np.ndarray:
+        open_mode = "r+"
+
+        if remove_existing:
+            open_mode = "w+"
+        
+        return np.memmap(
+            path,
+            dtype=dtype,
+            mode=open_mode,
+            shape=shape,
+        )
+
 # Load datasets
 def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_workers=4, test_open=False, shuffle=True, cifar_imb_ratio=None, meta=False):
     if phase == 'train_plain':
@@ -285,28 +357,29 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
 
         print('Use data transformation:', transform)
 
-        set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
+        # set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
+        set_ = MMAPDataset(data_root, txt, dataset, txt_split, transform, meta)
 
     # print()
     
-    if xm.is_master_ordinal():
-        if txt_split not in os.listdir(data_root+'/'+dataset):
-            os.mkdir(data_root+'/'+dataset+'/'+txt_split)
-            with ShardWriter(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+"-%06d.tar", maxcount=10000) as sink:
-                for sample, label, index in set_:
-                    if index%1000==0: print(index)
-                    sink.write({
-                        "__key__": str(index),
-                        "sample.jpeg": sample,
-                        "label.cls": label,
-                        "index.cls": index
-                    })
-    xm.rendezvous('Creating webdataset')
-    dataset_size = len(set_)
-    def dataset_len(self):
-        return dataset_size
-    WebDataset.__len__ = dataset_len
-    set_ = WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar').decode("pil").to_tuple("sample.jpeg","label.cls","index.cls").map_tuple(transform, lambda x:torch.tensor(x), lambda x:torch.tensor(x))
+    # if xm.is_master_ordinal():
+    #     if txt_split not in os.listdir(data_root+'/'+dataset):
+    #         os.mkdir(data_root+'/'+dataset+'/'+txt_split)
+    #         with ShardWriter(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+"-%06d.tar", maxcount=10000) as sink:
+    #             for sample, label, index in set_:
+    #                 if index%1000==0: print(index)
+    #                 sink.write({
+    #                     "__key__": str(index),
+    #                     "sample.jpeg": sample,
+    #                     "label.cls": label,
+    #                     "index.cls": index
+    #                 })
+    # xm.rendezvous('Creating webdataset')
+    # dataset_size = len(set_)
+    # def dataset_len(self):
+    #     return dataset_size
+    # WebDataset.__len__ = dataset_len
+    # set_ = WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar').decode("pil").to_tuple("sample.jpeg","label.cls","index.cls").map_tuple(transform, lambda x:torch.tensor(x), lambda x:torch.tensor(x))
     # if (shuffle):
     #     set_ = WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar', resampled=True).shuffle(1000).decode("pil").to_tuple("sample.jpeg","label.cls","index.cls").map_tuple(transform, lambda x:torch.tensor(x), lambda x:torch.tensor(x)).batched(batch_size, partial=False).with_epoch(dataset_size//batch_size)
     # else:
