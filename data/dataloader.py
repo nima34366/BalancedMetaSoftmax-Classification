@@ -23,7 +23,7 @@ from PIL import Image
 from data.ImbalanceCIFAR import IMBALANCECIFAR10, IMBALANCECIFAR100
 from torch.utils.data import DistributedSampler
 from typing import Optional, Iterator, Union
-from webdataset import WebDataset, ShardWriter, WebLoader
+# from webdataset import WebDataset, ShardWriter, WebLoader
 import numpy as np
 from tqdm import tqdm
 
@@ -283,8 +283,8 @@ class MMAPDataset(Dataset):
             sample = self.transform(sample)
             sample = sample.numpy()
         
-        if self.xm.is_master_ordinal():
-            if txt_split not in os.listdir(root+'/'+dataset):
+        if txt_split not in os.listdir(root+'/'+dataset):
+            if self.xm.is_master_ordinal():
                 os.mkdir(root+'/'+dataset+'/'+txt_split)
                 self.mmap_samples = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'samples.dat', sample.dtype, (len(self.labels), *sample.shape))
                 self.mmap_labels = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'labels.dat', label.dtype, (len(self.labels), *label.shape))
@@ -298,9 +298,9 @@ class MMAPDataset(Dataset):
                         sample = sample.numpy()
                     self.mmap_samples[i] = sample
                     self.mmap_labels[i] = label
-            else:
-                self.mmap_samples = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'samples.dat', sample.dtype, (len(self.labels), *sample.shape), use_existing=True)
-                self.mmap_labels = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'labels.dat', label.dtype, (len(self.labels), *label.shape), use_existing=True)
+        else:
+            self.mmap_samples = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'samples.dat', sample.dtype, (len(self.labels), *sample.shape), use_existing=True)
+            self.mmap_labels = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'labels.dat', label.dtype, (len(self.labels), *label.shape), use_existing=True)
         self.xm.rendezvous('Creating memmap')
 
     def __getitem__(self, idx: int):

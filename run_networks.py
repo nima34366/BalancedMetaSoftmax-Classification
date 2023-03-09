@@ -338,40 +338,26 @@ class model ():
             for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device)):
             # for step, (inputs, labels, indexes) in enumerate(para_loader):
                 # Break when step equal to epoch step
-                print('start')
                 if step == self.epoch_steps:
                     break
                 # if self.do_shuffle:
                 #     inputs, labels = self.shuffle_batch(inputs, labels)
-                print('send tpu')
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
-                print('done tpu')
                 # If on training phase, enable gradients
                 # with torch.set_grad_enabled(True):
                 if self.meta_sample:
                     # do inner loop
                     self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
                 # If training, forward with loss, and no top 5 accuracy calculation
-                print(1)
                 self.batch_forward(inputs, labels, 
                                 centroids=self.memory['centroids'],
                                 phase='train')
-                print(2)
                 self.batch_loss(labels)
-                print(3)
                 self.batch_backward()
-                print(4)
                 # Tracking predictions
                 _, preds = torch.max(self.logits, 1)
-                print(40)
-                # total_preds.append(torch2numpy(preds))
-                print(preds.shape, total_preds.shape)
-                print(labels.shape, total_labels.shape)
                 total_preds[step] = preds
-                print(41)
-                # total_labels.append(torch2numpy(labels))
                 total_labels[step] = labels
-                print(42)
                 # Output minibatch training results
                 if step % self.training_opt['display_step'] == 0:
 
@@ -402,17 +388,11 @@ class model ():
                         'feat': minibatch_loss_feat
                     }
 
-                # del inputs,labels
-                # del inputs,labels, self.logits, self.direct_memory_feature, self.centroids, self.features, self.feature_maps, self.loss, self.loss_perf
-
-                # gc.collect()
-                    # xm.master_print(met.metrics_report())
                     self.logger.log_loss(loss_info)
 
                 # Update priority weights if using PrioritizedSampler
                 # if self.training_opt['sampler'] and \
                 #    self.training_opt['sampler']['type'] == 'PrioritizedSampler':
-                print(6)
                 if hasattr(self.data['train'].sampler, 'update_weights'):
                     if hasattr(self.data['train'].sampler, 'ptype'):
                         ptype = self.data['train'].sampler.ptype 
@@ -425,9 +405,7 @@ class model ():
                         inlist.append(labels.cpu().numpy())
                     self.data['train'].sampler.update_weights(*inlist)
                     # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
-                print(7)
                 xm.rendezvous('step')
-                print('done')
             if hasattr(self.data['train'].sampler, 'get_weights'):
                 self.logger.log_ws(epoch, self.data['train'].sampler.get_weights())
             if hasattr(self.data['train'].sampler, 'reset_weights'):
@@ -556,7 +534,6 @@ class model ():
         # Iterate over dataset
         para_loader = pl.ParallelLoader(self.data[phase], [self.device])
         for inputs, labels, paths in tqdm(para_loader.per_device_loader(self.device)):
-            print('start eval')
             inputs, labels = inputs.to(self.device), labels.to(self.device)
             # If on training phase, enable gradients
             with torch.set_grad_enabled(False):
@@ -573,8 +550,6 @@ class model ():
                     feats_all.append(self.features.cpu().numpy())
                     labels_all.append(labels.cpu().numpy())
                     idxs_all.append(paths.numpy())
-                # del inputs, labels
-            print('done eval')
             
         if get_feat_only:
             typ = 'feat'
@@ -641,7 +616,7 @@ class model ():
                phase + '_fscore': self.eval_f_measure}
 
         if phase == 'val':
-            xm.master_print(print_str)
+            xm.master_print(*print_str)
         else:
             acc_str = ["{:.1f} \t {:.1f} \t {:.1f} \t {:.1f}".format(
                 self.many_acc_top1 * 100,
