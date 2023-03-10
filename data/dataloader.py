@@ -26,6 +26,7 @@ from typing import Optional, Iterator, Union
 # from webdataset import WebDataset, ShardWriter, WebLoader
 import numpy as np
 from tqdm import tqdm
+import time
 
 
 
@@ -336,20 +337,20 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
     txt = './data/%s/%s_%s.txt'%(dataset, dataset, txt_split)
     # txt = './data/%s/%s_%s.txt'%(dataset, dataset, (phase if phase != 'train_plain' else 'train'))
 
-    print('Loading data from %s' % (txt))
+    xm.master_print('Loading data from %s' % (txt))
 
 
     if dataset == 'iNaturalist18':
-        print('===> Loading iNaturalist18 statistics')
+        xm.master_print('===> Loading iNaturalist18 statistics')
         key = 'iNaturalist18'
     else:
         key = 'default'
 
     if dataset == 'CIFAR10_LT':
-        print('====> CIFAR10 Imbalance Ratio: ', cifar_imb_ratio)
+        xm.master_print('====> CIFAR10 Imbalance Ratio: ', cifar_imb_ratio)
         set_ = IMBALANCECIFAR10(phase, imbalance_ratio=cifar_imb_ratio, root=data_root)
     elif dataset == 'CIFAR100_LT':
-        print('====> CIFAR100 Imbalance Ratio: ', cifar_imb_ratio)
+        xm.master_print('====> CIFAR100 Imbalance Ratio: ', cifar_imb_ratio)
         set_ = IMBALANCECIFAR100(phase, imbalance_ratio=cifar_imb_ratio, root=data_root)
     else:
         rgb_mean, rgb_std = RGB_statistics[key]['mean'], RGB_statistics[key]['std']
@@ -358,19 +359,19 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
         else:
             transform = get_data_transform(phase, rgb_mean, rgb_std, key)
 
-        print('Use data transformation:', transform)
+        xm.master_print('Use data transformation:', transform)
 
         # set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
         set_ = MMAPDataset(data_root, txt, dataset, txt_split, transform, meta)
 
-    # print()
+    # xm.master_print()
     
     # if xm.is_master_ordinal():
     #     if txt_split not in os.listdir(data_root+'/'+dataset):
     #         os.mkdir(data_root+'/'+dataset+'/'+txt_split)
     #         with ShardWriter(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+"-%06d.tar", maxcount=10000) as sink:
     #             for sample, label, index in set_:
-    #                 if index%1000==0: print(index)
+    #                 if index%1000==0: xm.master_print(index)
     #                 sink.write({
     #                     "__key__": str(index),
     #                     "sample.jpeg": sample,
@@ -391,21 +392,21 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
 
 
     if sampler_dic and phase == 'train' and sampler_dic.get('batch_sampler', False):
-        print('Using sampler: ', sampler_dic['sampler'])
+        xm.master_print('Using sampler: ', sampler_dic['sampler'])
         return DataLoader(dataset=set_,
                            batch_sampler=DistributedSamplerWrapper(sampler_dic['sampler'](set_, **sampler_dic['params']), xm.xrt_world_size(), xm.get_ordinal(), shuffle=False),
                            num_workers=num_workers, drop_last=False)
 
     elif sampler_dic and (phase == 'train' or meta):
-        print('Using sampler: ', sampler_dic['sampler'])
-        # print('Sample %s samples per-class.' % sampler_dic['num_samples_cls'])
-        print('Sampler parameters: ', sampler_dic['params'])
+        xm.master_print('Using sampler: ', sampler_dic['sampler'])
+        # xm.master_print('Sample %s samples per-class.' % sampler_dic['num_samples_cls'])
+        xm.master_print('Sampler parameters: ', sampler_dic['params'])
         return DataLoader(dataset=set_, batch_size=None, shuffle=False, drop_last=False,
                            sampler=DistributedSamplerWrapper(sampler_dic['sampler'](set_, **sampler_dic['params']), xm.xrt_world_size(), xm.get_ordinal(), shuffle=False),
                            num_workers=num_workers)
     else:
-        print('No sampler.')
-        print('Shuffle is %s.' % (shuffle))
+        xm.master_print('No sampler.')
+        xm.master_print('Shuffle is %s.' % (shuffle))
         # loader = WebLoader(dataset=set_, num_workers=num_workers, batch_size=None)
         # if shuffle:
         #     return loader.unbatched().shuffle(1000).batched(batch_size)
@@ -415,6 +416,30 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
         # return set_
         # return DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=32, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
         # return DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=16)
-        return DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=16, drop_last=True, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=False))
+        # for batch_size in [128,256,512,1024,2048,4096]:
+        #     train_loader = DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=16, drop_last=True, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
+        #     start = time.time()
+        #     for epoch in range(1, 5):
+        #         for i, data in enumerate(train_loader):
+        #             pass
+        #     end = time.time()
+        #     xm.master_print("Finish with:{} second, batchsize={}".format(end - start, batch_size))
+        # for num_workers in [2,4,8,16,32,64,128]:
+        #     train_loader = DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=16, drop_last=True, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
+        #     start = time.time()
+        #     for epoch in range(1, 5):
+        #         for i, data in enumerate(train_loader):
+        #             pass
+        #     end = time.time()
+        #     xm.master_print("Finish with:{} second, num_workers={}".format(end - start, num_workers))
+        # for prefetch_factor in [16,32,64,128,256,512,1024,2048,4096,8192]:
+        #     train_loader = DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=prefetch_factor, drop_last=True, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
+        #     start = time.time()
+        #     for epoch in range(1, 5):
+        #         for i, data in enumerate(train_loader):
+        #             pass
+        #     end = time.time()
+        #     xm.master_print("Finish with:{} second, prefetch_factor={}".format(end - start, prefetch_factor))
+        return DataLoader(pin_memory=True, persistent_workers=True, dataset=set_, batch_size=batch_size, num_workers=num_workers, prefetch_factor=16, drop_last=True, sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
 
 

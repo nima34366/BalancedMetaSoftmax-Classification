@@ -104,6 +104,7 @@ def init_models(config, test_mode, meta_sample):
         model_args.update({'test': test_mode})
 
         networks[key] = source_import(def_file).create_model(**model_args)
+        # print(networks[key])
         if 'KNNClassifier' in type(networks[key]).__name__:
             # Put the KNN classifier on one single GPU
             networks[key] = networks[key] ####
@@ -265,6 +266,6 @@ def distrib_train(rank, flags):
             training_model.output_logits(openset=test_open)
         
 if __name__ == "__main__":
-    xmp.spawn(distrib_train, args=({},), nprocs=1, start_method='fork')
+    xmp.spawn(distrib_train, args=({},), nprocs=8, start_method='fork')
 
 print('ALL COMPLETED.')

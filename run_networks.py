@@ -334,7 +334,6 @@ class model ():
             # total_labels = []
             total_preds = torch.empty((self.epoch_steps, self.batch_size))
             total_labels = torch.empty((self.epoch_steps, self.batch_size))
-            xm.master_print(self.epoch_steps)
             for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device)):
             # for step, (inputs, labels, indexes) in enumerate(para_loader):
                 # Break when step equal to epoch step
@@ -533,7 +532,7 @@ class model ():
         featmaps_all = []
         # Iterate over dataset
         para_loader = pl.ParallelLoader(self.data[phase], [self.device])
-        for inputs, labels, paths in tqdm(para_loader.per_device_loader(self.device)):
+        for inputs, labels, paths in para_loader.per_device_loader(self.device):
             inputs, labels = inputs.to(self.device), labels.to(self.device)
             # If on training phase, enable gradients
             with torch.set_grad_enabled(False):

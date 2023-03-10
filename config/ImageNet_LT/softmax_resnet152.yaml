@@ -13,28 +13,28 @@ networks:
   classifier:
     def_file: ./models/DotProductClassifier.py
     optim_params: {lr: 0.2, momentum: 0.9, weight_decay: 0.0005}
-    params: {dataset: ImageNet_LT, feat_dim: 512, log_dir: ./logs/ImageNet_LT/clslearn/softmax_resnet10_cbs,
+    params: {dataset: ImageNet_LT, feat_dim: 2048, log_dir: ./logs/ImageNet_LT/clslearn/softmax_resnet152_cbs,
       num_classes: 1000, stage1_weights: false}
   feat_model:
-    def_file: ./models/ResNet10Feature.py
+    def_file: ./models/ResNet152Feature.py
     fix: true
     optim_params: {lr: 0.2, momentum: 0.9, weight_decay: 0.0005}
-    params: {dataset: ImageNet_LT, dropout: null, log_dir: ./logs/ImageNet_LT/clslearn/softmax_resnet10_cbs,
+    params: {dataset: ImageNet_LT, dropout: null, log_dir: ./logs/ImageNet_LT/clslearn/softmax_resnet152_cbs,
       stage1_weights: false, use_fc: false, use_selfatt: false}
 shuffle: false
 training_opt:
-  backbone: resnet10
+  backbone: resnet152
   batch_size: 1024
   dataset: ImageNet_LT
   display_step: 10
-  feature_dim: 512
-  log_dir: ./logs/ImageNet_LT/clslearn/softmax_resnet10_cbs
+  feature_dim: 2048
+  log_dir: ./logs/ImageNet_LT/clslearn/softmax_resnet152_cbs
   log_root: ./logs/ImageNet_LT
   num_classes: 1000
-  num_epochs: 50
-  num_workers: 64
+  num_epochs: 100
+  num_workers: 12
   open_threshold: 0.1
   sampler: null
   scheduler_params: {gamma: 0.1, step_size: 3}
-  stage: softmax_resnet10_cbs
+  stage: softmax_resnet152_cbs
   sub_dir: clslearn
