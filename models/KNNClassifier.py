@@ -34,8 +34,8 @@ class KNNClassifier(nn.Module):
         self.feat_mean.copy_(mean)
         self.centroids.copy_(centroids)
         if torch.cuda.is_available():
-            self.feat_mean = self.feat_mean.cuda()
-            self.centroids = self.centroids.cuda()
+            self.feat_mean = self.feat_mean.to(self.device)
+            self.centroids = self.centroids.to(self.device)
         self.initialized = True
 
     def forward(self, inputs, *args):

@@ -18,6 +18,12 @@ from torchvision import transforms
 import os
 from PIL import Image
 from data.ImbalanceCIFAR import IMBALANCECIFAR10, IMBALANCECIFAR100
+from torch.utils.data import DistributedSampler
+import torch_xla.core.xla_model as xm
+
+import numpy as np
+import torch
+from tqdm import tqdm
 
 
 # Image statistics
@@ -103,6 +109,79 @@ class LT_Dataset(Dataset):
 
         return sample, label, index
 
+class MMAPDataset(Dataset):
+    def __init__(self, root, txt, dataset,txt_split, transform=None, meta=False):
+        super().__init__()
+        self.img_path = []
+        self.labels = []
+        self.transform = transform
+        self.xm = xm
+
+        with open(txt) as f:
+            for line in f:
+                self.img_path.append(os.path.join(root, line.split()[0]))
+                self.labels.append(int(line.split()[1]))
+
+        # save the class frequency
+        if 'train' in txt and not meta:
+            if not os.path.exists('cls_freq'):
+                os.makedirs('cls_freq')
+            freq_path = os.path.join('cls_freq', dataset + '.json')
+            self.img_num_per_cls = [0 for _ in range(max(self.labels)+1)]
+            for cls in self.labels:
+                self.img_num_per_cls[cls] += 1
+            with open(freq_path, 'w') as fd:
+                json.dump(self.img_num_per_cls, fd)
+
+        path = self.img_path[0]
+        label = np.int32(self.labels[0])
+        with open(path, 'rb') as f:
+            sample = Image.open(f).convert('RGB')
+        if self.transform is not None:
+            sample = self.transform(sample)
+            sample = sample.numpy()
+        
+        if txt_split not in os.listdir(root+'/'+dataset):
+            if self.xm.is_master_ordinal():
+                os.mkdir(root+'/'+dataset+'/'+txt_split)
+                self.mmap_samples = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'samples.dat', sample.dtype, (len(self.labels), *sample.shape))
+                self.mmap_labels = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'labels.dat', label.dtype, (len(self.labels), *label.shape))
+                for i in tqdm(range(len(self.labels)), desc = 'creating memmap'):
+                    path = self.img_path[i]
+                    label = np.int32(self.labels[i])
+                    with open(path, 'rb') as f:
+                        sample = Image.open(f).convert('RGB')
+                    if self.transform is not None:
+                        sample = self.transform(sample)
+                        sample = sample.numpy()
+                    self.mmap_samples[i] = sample
+                    self.mmap_labels[i] = label
+        else:
+            self.mmap_samples = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'samples.dat', sample.dtype, (len(self.labels), *sample.shape), use_existing=True)
+            self.mmap_labels = self._init_mmap(root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'labels.dat', label.dtype, (len(self.labels), *label.shape), use_existing=True)
+        self.xm.rendezvous('Creating memmap')
+
+    def __getitem__(self, idx: int):
+        sample = torch.tensor(self.mmap_samples[idx])
+        label = torch.tensor(self.mmap_labels[idx])
+        return sample, label, idx
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def _init_mmap(self, path: str, dtype: np.dtype, shape, use_existing = False) -> np.ndarray:
+        open_mode = "w+"
+
+        if use_existing:
+            open_mode = "r"
+        
+        return np.memmap(
+            path,
+            dtype=dtype,
+            mode=open_mode,
+            shape=shape,
+        )
+
 
 # Load datasets
 def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_workers=4, test_open=False, shuffle=True, cifar_imb_ratio=None, meta=False):
@@ -140,8 +219,8 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
 
         print('Use data transformation:', transform)
 
-        set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
-
+        # set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
+        set_ = MMAPDataset(data_root, txt, dataset, txt_split, transform, meta)
 
     print(len(set_))
 
@@ -162,4 +241,6 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
         print('No sampler.')
         print('Shuffle is %s.' % (shuffle))
         return DataLoader(dataset=set_, batch_size=batch_size,
-                          shuffle=shuffle, num_workers=num_workers)
+                          num_workers=num_workers, drop_last=True,
+                          pin_memory=True, persistent_workers=True, prefetch_factor=16,
+                          sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))

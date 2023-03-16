@@ -26,7 +26,7 @@ class CosNorm_Classifier(nn.Module):
         self.out_dims = out_dims
         self.scale = scale
         self.margin = margin
-        self.weight = Parameter(torch.Tensor(out_dims, in_dims).cuda())
+        self.weight = Parameter(torch.Tensor(out_dims, in_dims).to(self.device))
         self.reset_parameters() 
 
     def reset_parameters(self):
