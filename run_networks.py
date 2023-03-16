@@ -198,9 +198,6 @@ class model ():
         '''
         This is a general single batch running function. 
         '''
-        self.model_optimizer.zero_grad()
-        if self.criterion_optimizer:
-            self.criterion_optimizer.zero_grad()
 
         # Calculate Features
         self.features, self.feature_maps = self.networks['feat_model'](inputs)
@@ -226,6 +223,9 @@ class model ():
 
     def batch_backward(self):
         # Zero out optimizer gradients
+        self.model_optimizer.zero_grad()
+        if self.criterion_optimizer:
+            self.criterion_optimizer.zero_grad()
         # Back-propagation from loss outputs
         self.loss.backward()
         # Step optimizers
@@ -329,6 +329,9 @@ class model ():
             # gc.collect()
             # Set model modes and set scheduler
             # In training, step optimizer scheduler and set model to train() 
+            self.model_optimizer_scheduler.step()
+            if self.criterion_optimizer:
+                self.criterion_optimizer_scheduler.step()
             # Iterate over dataset
             # total_preds = []
             # total_labels = []
@@ -339,55 +342,55 @@ class model ():
                 # Break when step equal to epoch step
                 if step == self.epoch_steps:
                     break
-                # if self.do_shuffle:
-                #     inputs, labels = self.shuffle_batch(inputs, labels)
+                if self.do_shuffle:
+                    inputs, labels = self.shuffle_batch(inputs, labels)
                 inputs, labels = inputs.to(self.device), labels.to(self.device)
                 # If on training phase, enable gradients
-                # with torch.set_grad_enabled(True):
-                if self.meta_sample:
-                    # do inner loop
-                    self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
-                # If training, forward with loss, and no top 5 accuracy calculation
-                self.batch_forward(inputs, labels, 
-                                centroids=self.memory['centroids'],
-                                phase='train')
-                self.batch_loss(labels)
-                self.batch_backward()
-                # Tracking predictions
-                _, preds = torch.max(self.logits, 1)
-                total_preds[step] = preds
-                total_labels[step] = labels
-                # Output minibatch training results
-                if step % self.training_opt['display_step'] == 0:
+                with torch.set_grad_enabled(True):
+                    if self.meta_sample:
+                        # do inner loop
+                        self.meta_forward(inputs, labels, verbose=step % self.training_opt['display_step'] == 0)
+                    # If training, forward with loss, and no top 5 accuracy calculation
+                    self.batch_forward(inputs, labels, 
+                                    centroids=self.memory['centroids'],
+                                    phase='train')
+                    self.batch_loss(labels)
+                    self.batch_backward()
+                    # Tracking predictions
+                    _, preds = torch.max(self.logits, 1)
+                    total_preds[step] = preds
+                    total_labels[step] = labels
+                    # Output minibatch training results
+                    if step % self.training_opt['display_step'] == 0:
 
-                    minibatch_loss_feat = self.loss_feat.item() \
-                        if 'FeatureLoss' in self.criterions.keys() else None
-                    minibatch_loss_perf = self.loss_perf.item() \
-                        if 'PerformanceLoss' in self.criterions else None
-                    minibatch_loss_total = self.loss.item()
-                    minibatch_acc = mic_acc_cal(preds, labels)
+                        minibatch_loss_feat = self.loss_feat.item() \
+                            if 'FeatureLoss' in self.criterions.keys() else None
+                        minibatch_loss_perf = self.loss_perf.item() \
+                            if 'PerformanceLoss' in self.criterions else None
+                        minibatch_loss_total = self.loss.item()
+                        minibatch_acc = mic_acc_cal(preds, labels)
 
-                    print_str = ['Epoch: [%d/%d]' 
-                                % (epoch, self.training_opt['num_epochs']),
-                                'Step: %5d' 
-                                % (step),
-                                'Minibatch_loss_feature: %.3f' 
-                                % (minibatch_loss_feat) if minibatch_loss_feat else '',
-                                'Minibatch_loss_performance: %.3f'
-                                % (minibatch_loss_perf) if minibatch_loss_perf else '',
-                                'Minibatch_accuracy_micro: %.3f'
-                                % (minibatch_acc)]
-                    print_write(print_str, self.log_file)
+                        print_str = ['Epoch: [%d/%d]' 
+                                    % (epoch, self.training_opt['num_epochs']),
+                                    'Step: %5d' 
+                                    % (step),
+                                    'Minibatch_loss_feature: %.3f' 
+                                    % (minibatch_loss_feat) if minibatch_loss_feat else '',
+                                    'Minibatch_loss_performance: %.3f'
+                                    % (minibatch_loss_perf) if minibatch_loss_perf else '',
+                                    'Minibatch_accuracy_micro: %.3f'
+                                    % (minibatch_acc)]
+                        print_write(print_str, self.log_file)
 
-                    loss_info = {
-                        'Epoch': epoch,
-                        'Step': step,
-                        'Total': minibatch_loss_total,
-                        'CE': minibatch_loss_perf,
-                        'feat': minibatch_loss_feat
-                    }
+                        loss_info = {
+                            'Epoch': epoch,
+                            'Step': step,
+                            'Total': minibatch_loss_total,
+                            'CE': minibatch_loss_perf,
+                            'feat': minibatch_loss_feat
+                        }
 
-                    self.logger.log_loss(loss_info)
+                        self.logger.log_loss(loss_info)
 
                 # Update priority weights if using PrioritizedSampler
                 # if self.training_opt['sampler'] and \
@@ -410,9 +413,6 @@ class model ():
             if hasattr(self.data['train'].sampler, 'reset_weights'):
                 self.data['train'].sampler.reset_weights(epoch)
 
-            self.model_optimizer_scheduler.step()
-            if self.criterion_optimizer:
-                self.criterion_optimizer_scheduler.step()
 
             # After every epoch, validation
             rsls = {'epoch': epoch}
@@ -523,7 +523,7 @@ class model ():
 
         # In validation or testing mode, set model to eval() and initialize running loss/correct
         for model in self.networks.values():
-            model.to(self.device).eval()
+            model.eval()
         self.total_logits = torch.empty((0, self.training_opt['num_classes'])).to(self.device)
         self.total_labels = torch.empty(0, dtype=torch.long).to(self.device)
         self.total_paths = np.empty(0)
