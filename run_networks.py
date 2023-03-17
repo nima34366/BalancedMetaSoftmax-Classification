@@ -30,8 +30,9 @@ import higher
 
 import torch_xla.core.xla_model as xm
 import torch_xla.distributed.parallel_loader as pl
+# import pprofile
 
-
+# profiler = pprofile.Profile()
 
 class model ():
     
@@ -308,7 +309,7 @@ class model ():
             # max_mem_mb = torch.cuda.max_memory_allocated() / 1024.0 / 1024.0
             # print_str.append('\nMax Mem: {:.0f}M'.format(max_mem_mb))
             print_write(print_str, self.log_file)
-
+    # @profile
     def train(self):
         # When training the network
         print_str = ['Phase: train']
@@ -326,9 +327,13 @@ class model ():
         # best_centroids = self.centroids
 
         end_epoch = self.training_opt['num_epochs']
-
+        start = time.time()
         # Loop over epochs
         for epoch in range(1, end_epoch + 1):
+            # if xm.is_master_ordinal:
+            #     profiler.enable()
+            xm.master_print('Time for epoch',epoch,time.time() - start)
+            start = time.time()
             for model in self.networks.values():
                 model.train()
 
@@ -459,6 +464,9 @@ class model ():
             
             xm.master_print('===> Saving checkpoint')
             self.save_latest(epoch)
+            # if xm.is_master_ordinal:
+            #     profiler.disable()
+            #     profiler.print_stats()
 
         xm.master_print()
         xm.master_print('Training Complete.')

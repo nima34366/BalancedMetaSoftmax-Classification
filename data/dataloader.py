@@ -24,6 +24,7 @@ import torch_xla.core.xla_model as xm
 import numpy as np
 import torch
 from tqdm import tqdm
+from webdataset import WebDataset, ShardWriter, WebLoader
 
 
 # Image statistics
@@ -102,10 +103,11 @@ class LT_Dataset(Dataset):
         label = self.labels[index]
 
         with open(path, 'rb') as f:
-            sample = Image.open(f).convert('RGB')
+            sample = f.read()
+        #     sample = Image.open(f).convert('RGB')
 
-        if self.transform is not None:
-            sample = self.transform(sample)
+        # if self.transform is not None:
+        #     sample = self.transform(sample)
 
         return sample, label, index
 
@@ -219,10 +221,36 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
 
         print('Use data transformation:', transform)
 
-        # set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
-        set_ = MMAPDataset(data_root, txt, dataset, txt_split, transform, meta)
+        set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
+        # set_ = MMAPDataset(data_root, txt, dataset, txt_split, transform, meta)
 
     print(len(set_))
+
+    if xm.is_master_ordinal():
+        if txt_split not in os.listdir(data_root+'/'+dataset):
+            os.mkdir(data_root+'/'+dataset+'/'+txt_split)
+        if 'webdataset' not in os.listdir(data_root+'/'+dataset+'/'+txt_split):
+            os.mkdir(data_root+'/'+dataset+'/'+txt_split+'/webdataset')
+            with ShardWriter(data_root+'/'+dataset+'/'+txt_split+'/webdataset/'+dataset+txt_split+"-%06d.tar", maxcount=10000) as sink:
+                for sample, label, index in set_:
+                    if index%1000==0: xm.master_print(index)
+                    sink.write({
+                        "__key__": str(index),
+                        "sample.jpeg": sample,
+                        "label.cls": label,
+                        "index.cls": index
+                    })
+    xm.rendezvous('Creating webdataset')
+    dataset_size = len(set_)
+    def dataset_len(self):
+        return dataset_size
+    WebDataset.__len__ = dataset_len
+    # set_ = WebDataset(data_root+'/'+dataset+'/'+txt_split+'/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar').decode("pil").to_tuple("sample.jpeg","label.cls","index.cls").map_tuple(transform, lambda x:torch.tensor(x), lambda x:torch.tensor(x))
+    if (shuffle):
+        set_ = WebDataset(data_root+'/'+dataset+'/'+txt_split+'/webdataset/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar', resampled=True).shuffle(1000).decode("pil").to_tuple("sample.jpeg","label.cls","index.cls").map_tuple(transform, lambda x:torch.tensor(x), lambda x:torch.tensor(x)).batched(batch_size, partial=False).with_epoch(dataset_size//batch_size)
+    else:
+        set_ = WebDataset(data_root+'/'+dataset+'/'+txt_split+'/webdataset/'+dataset+txt_split+'-{000000..0000'+str(len(os.listdir(data_root+'/'+dataset+'/'+txt_split))-1)+'}.tar', resampled=True).decode("pil").to_tuple("sample.jpeg","label.cls","index.cls").map_tuple(transform, lambda x:torch.tensor(x), lambda x:torch.tensor(x)).batched(batch_size, partial=False).with_epoch(dataset_size//batch_size)
+
 
     if sampler_dic and phase == 'train' and sampler_dic.get('batch_sampler', False):
         print('Using sampler: ', sampler_dic['sampler'])
@@ -240,7 +268,8 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
     else:
         print('No sampler.')
         print('Shuffle is %s.' % (shuffle))
-        return DataLoader(dataset=set_, batch_size=batch_size,
-                          num_workers=num_workers, drop_last=True,
-                          pin_memory=True, persistent_workers=True, prefetch_factor=16,
-                          sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
+        # return DataLoader(dataset=set_, batch_size=batch_size,
+        #                   num_workers=num_workers, drop_last=True,
+        #                   pin_memory=True, persistent_workers=True, prefetch_factor=16,
+        #                   sampler = DistributedSampler(set_, xm.xrt_world_size(), xm.get_ordinal(), shuffle=shuffle))
+        return DataLoader(dataset=set_, batch_size=None, num_workers=num_workers, prefetch_factor=8)
