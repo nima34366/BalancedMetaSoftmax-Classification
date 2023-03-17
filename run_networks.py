@@ -137,7 +137,7 @@ class model ():
                 # Put the KNN classifier on one single GPU
                 self.networks[key] = self.networks[key].to(self.device)
             else:
-                self.networks[key] = nn.DataParallel(self.networks[key]).to(self.device)
+                self.networks[key] = self.networks[key].to(self.device)
 
             if 'fix' in val and val['fix']:
                 xm.master_print('Freezing feature weights except for self attention weights (if exist).')
@@ -245,10 +245,10 @@ class model ():
         self.loss.backward()
         # Step optimizers
         # self.model_optimizer.step()
-        xm.optimizer_step(self.model_optimizer, barrier=True)
+        xm.optimizer_step(self.model_optimizer)
         if self.criterion_optimizer:
             # self.criterion_optimizer.step()
-            xm.optimizer_step(self.criterion_optimizer, barrier=True)
+            xm.optimizer_step(self.criterion_optimizer)
 
     def batch_loss(self, labels):
         self.loss = 0
@@ -326,9 +326,11 @@ class model ():
         # best_centroids = self.centroids
 
         end_epoch = self.training_opt['num_epochs']
-
+        start = time.time()
         # Loop over epochs
         for epoch in range(1, end_epoch + 1):
+            xm.master_print('Time for epoch',epoch,time.time() - start)
+            start = time.time()
             for model in self.networks.values():
                 model.train()
 
@@ -371,11 +373,8 @@ class model ():
 
                     # Tracking predictions
                     _, preds = torch.max(self.logits, 1)
-                    xm.master_print(2)
                     total_preds.append(preds)
-                    xm.master_print(3)
                     total_labels.append(labels)
-                    xm.master_print(4)
                     # total_preds[step] = preds
                     # total_labels[step] = labels
                     # Output minibatch training results

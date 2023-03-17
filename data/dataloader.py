@@ -15,6 +15,7 @@ All rights reserved.
 import json
 from torch.utils.data import Dataset, DataLoader, ConcatDataset
 from torchvision import transforms
+from torchvision.io import read_image
 import os
 from PIL import Image
 from data.ImbalanceCIFAR import IMBALANCECIFAR10, IMBALANCECIFAR100
@@ -219,8 +220,8 @@ def load_data(data_root, dataset, phase, batch_size, sampler_dic=None, num_worke
 
         print('Use data transformation:', transform)
 
-        # set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
-        set_ = MMAPDataset(data_root, txt, dataset, txt_split, transform, meta)
+        set_ = LT_Dataset(data_root, txt, dataset, transform, meta)
+        # set_ = MMAPDataset(data_root, txt, dataset, txt_split, transform, meta)
 
     print(len(set_))
 
