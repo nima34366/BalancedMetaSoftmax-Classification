@@ -1,0 +1,7 @@
+Epoch: [0/100] Step:     0  Minibatch_loss_performance: 7.094 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:    10  Minibatch_loss_performance: 14.250 Minibatch_accuracy_micro: 0.009
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.002 Median_top1: 0.000 Low_top1: 0.000 
+
+Phase: val

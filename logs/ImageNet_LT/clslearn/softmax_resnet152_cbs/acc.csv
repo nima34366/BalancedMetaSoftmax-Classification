@@ -1,0 +1,2 @@
+epoch,train_all,train_many,train_median,train_low,val_all,val_many,val_median,val_low,val_fscore
+0,0.0008814988938053097,0.0023826014487862367,0.0,0.0,0.0,0.0,0.0,0.0,0.0

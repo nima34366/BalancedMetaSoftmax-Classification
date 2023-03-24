@@ -1,0 +1,702 @@
+Epoch: [0/100] Step:     0  Minibatch_loss_performance: 7.125 Minibatch_accuracy_micro: 0.001
+Epoch: [0/100] Step:    10  Minibatch_loss_performance: 13.250 Minibatch_accuracy_micro: 0.006
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.003 Median_top1: 0.000 Low_top1: nan 
+
+Phase: val
+Epoch: [1/100] Step:     0  Minibatch_loss_performance: 23.250 Minibatch_accuracy_micro: 0.003
+Epoch: [1/100] Step:    10  Minibatch_loss_performance: 48.500 Minibatch_accuracy_micro: 0.003
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.002 Median_top1: 0.000 Low_top1: 0.000 
+
+Phase: val
+Epoch: [2/100] Step:     0  Minibatch_loss_performance: 47.000 Minibatch_accuracy_micro: 0.002
+Epoch: [2/100] Step:    10  Minibatch_loss_performance: 49.750 Minibatch_accuracy_micro: 0.002
+
+ Training acc Top1: 0.635 
+ Many_top1: 0.002 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [3/100] Step:     0  Minibatch_loss_performance: 49.500 Minibatch_accuracy_micro: 0.003
+Epoch: [3/100] Step:    10  Minibatch_loss_performance: 47.250 Minibatch_accuracy_micro: 0.004
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.003 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [4/100] Step:     0  Minibatch_loss_performance: 50.750 Minibatch_accuracy_micro: 0.004
+Epoch: [4/100] Step:    10  Minibatch_loss_performance: 46.500 Minibatch_accuracy_micro: 0.002
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.003 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [5/100] Step:     0  Minibatch_loss_performance: 59.500 Minibatch_accuracy_micro: 0.012
+Epoch: [5/100] Step:    10  Minibatch_loss_performance: 73.500 Minibatch_accuracy_micro: 0.008
+
+ Training acc Top1: 0.004 
+ Many_top1: 0.003 Median_top1: 0.000 Low_top1: 0.000 
+
+Phase: val
+Epoch: [6/100] Step:     0  Minibatch_loss_performance: 88.000 Minibatch_accuracy_micro: 0.007
+Epoch: [6/100] Step:    10  Minibatch_loss_performance: 87.000 Minibatch_accuracy_micro: 0.007
+
+ Training acc Top1: 0.004 
+ Many_top1: 0.003 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [7/100] Step:     0  Minibatch_loss_performance: 103.500 Minibatch_accuracy_micro: 0.003
+Epoch: [7/100] Step:    10  Minibatch_loss_performance: 94.500 Minibatch_accuracy_micro: 0.004
+
+ Training acc Top1: 0.876 
+ Many_top1: 0.002 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [8/100] Step:     0  Minibatch_loss_performance: 103.000 Minibatch_accuracy_micro: 0.008
+Epoch: [8/100] Step:    10  Minibatch_loss_performance: 87.000 Minibatch_accuracy_micro: 0.002
+
+ Training acc Top1: 0.009 
+ Many_top1: 0.003 Median_top1: 0.000 Low_top1: 0.000 
+
+Phase: val
+Epoch: [9/100] Step:     0  Minibatch_loss_performance: 90.000 Minibatch_accuracy_micro: 0.004
+Epoch: [9/100] Step:    10  Minibatch_loss_performance: 80.000 Minibatch_accuracy_micro: 0.002
+
+ Training acc Top1: 0.009 
+ Many_top1: 0.003 Median_top1: 0.002 Low_top1: nan 
+
+Phase: val
+Epoch: [10/100] Step:     0  Minibatch_loss_performance: 81.500 Minibatch_accuracy_micro: 0.007
+Epoch: [10/100] Step:    10  Minibatch_loss_performance: 71.500 Minibatch_accuracy_micro: 0.001
+
+ Training acc Top1: 0.000 
+ Many_top1: 0.002 Median_top1: 0.000 Low_top1: 0.000 
+
+Phase: val
+Epoch: [11/100] Step:     0  Minibatch_loss_performance: 83.000 Minibatch_accuracy_micro: 0.001
+Epoch: [11/100] Step:    10  Minibatch_loss_performance: 68.500 Minibatch_accuracy_micro: 0.008
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.003 Median_top1: 0.000 Low_top1: 0.000 
+
+Phase: val
+Epoch: [12/100] Step:     0  Minibatch_loss_performance: 89.500 Minibatch_accuracy_micro: 0.002
+Epoch: [12/100] Step:    10  Minibatch_loss_performance: 71.500 Minibatch_accuracy_micro: 0.009
+
+ Training acc Top1: 0.009 
+ Many_top1: 0.002 Median_top1: 0.000 Low_top1: nan 
+
+Phase: val
+Epoch: [13/100] Step:     0  Minibatch_loss_performance: 93.000 Minibatch_accuracy_micro: 0.002
+Epoch: [13/100] Step:    10  Minibatch_loss_performance: 85.000 Minibatch_accuracy_micro: 0.008
+
+ Training acc Top1: 0.054 
+ Many_top1: 0.003 Median_top1: 0.003 Low_top1: nan 
+
+Phase: val
+Epoch: [14/100] Step:     0  Minibatch_loss_performance: 108.000 Minibatch_accuracy_micro: 0.005
+Epoch: [14/100] Step:    10  Minibatch_loss_performance: 85.500 Minibatch_accuracy_micro: 0.007
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.004 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [15/100] Step:     0  Minibatch_loss_performance: 96.500 Minibatch_accuracy_micro: 0.002
+Epoch: [15/100] Step:    10  Minibatch_loss_performance: 83.000 Minibatch_accuracy_micro: 0.005
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.003 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [16/100] Step:     0  Minibatch_loss_performance: 99.500 Minibatch_accuracy_micro: 0.008
+Epoch: [16/100] Step:    10  Minibatch_loss_performance: 88.000 Minibatch_accuracy_micro: 0.002
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.003 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [17/100] Step:     0  Minibatch_loss_performance: 101.500 Minibatch_accuracy_micro: 0.009
+Epoch: [17/100] Step:    10  Minibatch_loss_performance: 90.000 Minibatch_accuracy_micro: 0.005
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.004 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [18/100] Step:     0  Minibatch_loss_performance: 101.000 Minibatch_accuracy_micro: 0.004
+Epoch: [18/100] Step:    10  Minibatch_loss_performance: 83.000 Minibatch_accuracy_micro: 0.002
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.002 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [19/100] Step:     0  Minibatch_loss_performance: 88.500 Minibatch_accuracy_micro: 0.001
+Epoch: [19/100] Step:    10  Minibatch_loss_performance: 86.500 Minibatch_accuracy_micro: 0.006
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.003 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [20/100] Step:     0  Minibatch_loss_performance: 97.000 Minibatch_accuracy_micro: 0.004
+Epoch: [20/100] Step:    10  Minibatch_loss_performance: 87.000 Minibatch_accuracy_micro: 0.003
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.004 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [21/100] Step:     0  Minibatch_loss_performance: 91.000 Minibatch_accuracy_micro: 0.005
+Epoch: [21/100] Step:    10  Minibatch_loss_performance: 88.000 Minibatch_accuracy_micro: 0.002
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.003 Median_top1: 0.000 Low_top1: 0.000 
+
+Phase: val
+Epoch: [22/100] Step:     0  Minibatch_loss_performance: 84.000 Minibatch_accuracy_micro: 0.003
+Epoch: [22/100] Step:    10  Minibatch_loss_performance: 88.000 Minibatch_accuracy_micro: 0.002
+
+ Training acc Top1: 0.000 
+ Many_top1: 0.003 Median_top1: 0.001 Low_top1: 0.000 
+
+Phase: val
+Epoch: [23/100] Step:     0  Minibatch_loss_performance: 80.000 Minibatch_accuracy_micro: 0.008
+Epoch: [23/100] Step:    10  Minibatch_loss_performance: 81.500 Minibatch_accuracy_micro: 0.000
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.003 Median_top1: 0.003 Low_top1: 0.000 
+
+Phase: val
+Epoch: [24/100] Step:     0  Minibatch_loss_performance: 73.000 Minibatch_accuracy_micro: 0.009
+Epoch: [24/100] Step:    10  Minibatch_loss_performance: 78.000 Minibatch_accuracy_micro: 0.003
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.003 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [25/100] Step:     0  Minibatch_loss_performance: 78.000 Minibatch_accuracy_micro: 0.008
+Epoch: [25/100] Step:    10  Minibatch_loss_performance: 78.500 Minibatch_accuracy_micro: 0.009
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.004 Median_top1: 0.004 Low_top1: 0.000 
+
+Phase: val
+Epoch: [26/100] Step:     0  Minibatch_loss_performance: 91.000 Minibatch_accuracy_micro: 0.008
+Epoch: [26/100] Step:    10  Minibatch_loss_performance: 99.000 Minibatch_accuracy_micro: 0.001
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.003 Median_top1: 0.004 Low_top1: 0.000 
+
+Phase: val
+Epoch: [27/100] Step:     0  Minibatch_loss_performance: 95.000 Minibatch_accuracy_micro: 0.001
+Epoch: [27/100] Step:    10  Minibatch_loss_performance: 84.000 Minibatch_accuracy_micro: 0.004
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.003 Median_top1: 0.001 Low_top1: 0.000 
+
+Phase: val
+Epoch: [28/100] Step:     0  Minibatch_loss_performance: 78.500 Minibatch_accuracy_micro: 0.001
+Epoch: [28/100] Step:    10  Minibatch_loss_performance: 75.000 Minibatch_accuracy_micro: 0.003
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.003 Median_top1: 0.001 Low_top1: 0.000 
+
+Phase: val
+Epoch: [29/100] Step:     0  Minibatch_loss_performance: 68.500 Minibatch_accuracy_micro: 0.004
+Epoch: [29/100] Step:    10  Minibatch_loss_performance: 66.500 Minibatch_accuracy_micro: 0.010
+
+ Training acc Top1: 0.050 
+ Many_top1: 0.004 Median_top1: 0.002 Low_top1: nan 
+
+Phase: val
+Epoch: [30/100] Step:     0  Minibatch_loss_performance: 64.500 Minibatch_accuracy_micro: 0.006
+Epoch: [30/100] Step:    10  Minibatch_loss_performance: 56.500 Minibatch_accuracy_micro: 0.002
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.004 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [31/100] Step:     0  Minibatch_loss_performance: 62.750 Minibatch_accuracy_micro: 0.006
+Epoch: [31/100] Step:    10  Minibatch_loss_performance: 47.750 Minibatch_accuracy_micro: 0.008
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.004 Median_top1: 0.001 Low_top1: 0.000 
+
+Phase: val
+Epoch: [32/100] Step:     0  Minibatch_loss_performance: 54.500 Minibatch_accuracy_micro: 0.007
+Epoch: [32/100] Step:    10  Minibatch_loss_performance: 45.750 Minibatch_accuracy_micro: 0.005
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.003 Median_top1: 0.001 Low_top1: nan 
+
+Phase: val
+Epoch: [33/100] Step:     0  Minibatch_loss_performance: 58.500 Minibatch_accuracy_micro: 0.007
+Epoch: [33/100] Step:    10  Minibatch_loss_performance: 53.500 Minibatch_accuracy_micro: 0.005
+
+ Training acc Top1: 0.023 
+ Many_top1: 0.005 Median_top1: 0.002 Low_top1: nan 
+
+Phase: val
+Epoch: [34/100] Step:     0  Minibatch_loss_performance: 67.500 Minibatch_accuracy_micro: 0.003
+Epoch: [34/100] Step:    10  Minibatch_loss_performance: 57.500 Minibatch_accuracy_micro: 0.008
+
+ Training acc Top1: 0.024 
+ Many_top1: 0.004 Median_top1: 0.002 Low_top1: nan 
+
+Phase: val
+Epoch: [35/100] Step:     0  Minibatch_loss_performance: 61.000 Minibatch_accuracy_micro: 0.003
+Epoch: [35/100] Step:    10  Minibatch_loss_performance: 47.750 Minibatch_accuracy_micro: 0.011
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.005 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [36/100] Step:     0  Minibatch_loss_performance: 56.250 Minibatch_accuracy_micro: 0.006
+Epoch: [36/100] Step:    10  Minibatch_loss_performance: 44.000 Minibatch_accuracy_micro: 0.006
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.004 Median_top1: 0.003 Low_top1: 0.000 
+
+Phase: val
+Epoch: [37/100] Step:     0  Minibatch_loss_performance: 52.750 Minibatch_accuracy_micro: 0.003
+Epoch: [37/100] Step:    10  Minibatch_loss_performance: 45.750 Minibatch_accuracy_micro: 0.001
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.004 Median_top1: 0.003 Low_top1: 0.000 
+
+Phase: val
+Epoch: [38/100] Step:     0  Minibatch_loss_performance: 48.000 Minibatch_accuracy_micro: 0.001
+Epoch: [38/100] Step:    10  Minibatch_loss_performance: 46.000 Minibatch_accuracy_micro: 0.006
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.004 Median_top1: 0.003 Low_top1: 0.000 
+
+Phase: val
+Epoch: [39/100] Step:     0  Minibatch_loss_performance: 51.500 Minibatch_accuracy_micro: 0.004
+Epoch: [39/100] Step:    10  Minibatch_loss_performance: 45.750 Minibatch_accuracy_micro: 0.005
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.005 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [40/100] Step:     0  Minibatch_loss_performance: 45.000 Minibatch_accuracy_micro: 0.010
+Epoch: [40/100] Step:    10  Minibatch_loss_performance: 47.500 Minibatch_accuracy_micro: 0.008
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.005 Median_top1: 0.000 Low_top1: 0.000 
+
+Phase: val
+Epoch: [41/100] Step:     0  Minibatch_loss_performance: 46.000 Minibatch_accuracy_micro: 0.009
+Epoch: [41/100] Step:    10  Minibatch_loss_performance: 40.500 Minibatch_accuracy_micro: 0.009
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.006 Median_top1: 0.004 Low_top1: 0.000 
+
+Phase: val
+Epoch: [42/100] Step:     0  Minibatch_loss_performance: 38.750 Minibatch_accuracy_micro: 0.002
+Epoch: [42/100] Step:    10  Minibatch_loss_performance: 35.750 Minibatch_accuracy_micro: 0.008
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.005 Median_top1: 0.002 Low_top1: 0.000 
+
+Phase: val
+Epoch: [43/100] Step:     0  Minibatch_loss_performance: 35.000 Minibatch_accuracy_micro: 0.006
+Epoch: [43/100] Step:    10  Minibatch_loss_performance: 33.750 Minibatch_accuracy_micro: 0.006
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.006 Median_top1: 0.003 Low_top1: 0.000 
+
+Phase: val
+Epoch: [44/100] Step:     0  Minibatch_loss_performance: 29.375 Minibatch_accuracy_micro: 0.009
+Epoch: [44/100] Step:    10  Minibatch_loss_performance: 33.000 Minibatch_accuracy_micro: 0.009
+
+ Training acc Top1: 0.002 
+ Many_top1: 0.008 Median_top1: 0.001 Low_top1: nan 
+
+Phase: val
+Epoch: [45/100] Step:     0  Minibatch_loss_performance: 32.250 Minibatch_accuracy_micro: 0.007
+Epoch: [45/100] Step:    10  Minibatch_loss_performance: 32.250 Minibatch_accuracy_micro: 0.009
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.009 Median_top1: 0.003 Low_top1: nan 
+
+Phase: val
+Epoch: [46/100] Step:     0  Minibatch_loss_performance: 26.750 Minibatch_accuracy_micro: 0.006
+Epoch: [46/100] Step:    10  Minibatch_loss_performance: 28.500 Minibatch_accuracy_micro: 0.008
+
+ Training acc Top1: 0.001 
+ Many_top1: 0.007 Median_top1: 0.001 Low_top1: nan 
+
+Phase: val
+Epoch: [47/100] Step:     0  Minibatch_loss_performance: 31.000 Minibatch_accuracy_micro: 0.009
+Epoch: [47/100] Step:    10  Minibatch_loss_performance: 37.250 Minibatch_accuracy_micro: 0.007
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.007 Median_top1: 0.003 Low_top1: 0.000 
+
+Phase: val
+Epoch: [48/100] Step:     0  Minibatch_loss_performance: 30.875 Minibatch_accuracy_micro: 0.009
+Epoch: [48/100] Step:    10  Minibatch_loss_performance: 39.500 Minibatch_accuracy_micro: 0.013
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.009 Median_top1: 0.004 Low_top1: 0.000 
+
+Phase: val
+Epoch: [49/100] Step:     0  Minibatch_loss_performance: 27.750 Minibatch_accuracy_micro: 0.007
+Epoch: [49/100] Step:    10  Minibatch_loss_performance: 30.500 Minibatch_accuracy_micro: 0.013
+
+ Training acc Top1: 0.877 
+ Many_top1: 0.010 Median_top1: 0.005 Low_top1: 0.000 
+
+Phase: val
+Epoch: [50/100] Step:     0  Minibatch_loss_performance: 21.125 Minibatch_accuracy_micro: 0.014
+Epoch: [50/100] Step:    10  Minibatch_loss_performance: 23.500 Minibatch_accuracy_micro: 0.009
+
+ Training acc Top1: 0.878 
+ Many_top1: 0.011 Median_top1: 0.005 Low_top1: 0.000 
+
+Phase: val
+Epoch: [51/100] Step:     0  Minibatch_loss_performance: 18.875 Minibatch_accuracy_micro: 0.010
+Epoch: [51/100] Step:    10  Minibatch_loss_performance: 23.125 Minibatch_accuracy_micro: 0.022
+
+ Training acc Top1: 0.878 
+ Many_top1: 0.011 Median_top1: 0.005 Low_top1: 0.000 
+
+Phase: val
+Epoch: [52/100] Step:     0  Minibatch_loss_performance: 19.875 Minibatch_accuracy_micro: 0.017
+Epoch: [52/100] Step:    10  Minibatch_loss_performance: 18.750 Minibatch_accuracy_micro: 0.011
+
+ Training acc Top1: 0.032 
+ Many_top1: 0.010 Median_top1: 0.005 Low_top1: 0.000 
+
+Phase: val
+Epoch: [53/100] Step:     0  Minibatch_loss_performance: 15.812 Minibatch_accuracy_micro: 0.014
+Epoch: [53/100] Step:    10  Minibatch_loss_performance: 17.250 Minibatch_accuracy_micro: 0.008
+
+ Training acc Top1: 0.032 
+ Many_top1: 0.011 Median_top1: 0.006 Low_top1: 0.000 
+
+Phase: val
+Epoch: [54/100] Step:     0  Minibatch_loss_performance: 17.625 Minibatch_accuracy_micro: 0.026
+Epoch: [54/100] Step:    10  Minibatch_loss_performance: 13.625 Minibatch_accuracy_micro: 0.027
+
+ Training acc Top1: 0.002 
+ Many_top1: 0.012 Median_top1: 0.004 Low_top1: 0.000 
+
+Phase: val
+Epoch: [55/100] Step:     0  Minibatch_loss_performance: 15.250 Minibatch_accuracy_micro: 0.018
+Epoch: [55/100] Step:    10  Minibatch_loss_performance: 17.000 Minibatch_accuracy_micro: 0.007
+
+ Training acc Top1: 0.002 
+ Many_top1: 0.011 Median_top1: 0.005 Low_top1: nan 
+
+Phase: val
+Epoch: [56/100] Step:     0  Minibatch_loss_performance: 17.125 Minibatch_accuracy_micro: 0.014
+Epoch: [56/100] Step:    10  Minibatch_loss_performance: 13.938 Minibatch_accuracy_micro: 0.009
+
+ Training acc Top1: 0.033 
+ Many_top1: 0.012 Median_top1: 0.006 Low_top1: 0.000 
+
+Phase: val
+Epoch: [57/100] Step:     0  Minibatch_loss_performance: 14.375 Minibatch_accuracy_micro: 0.013
+Epoch: [57/100] Step:    10  Minibatch_loss_performance: 14.125 Minibatch_accuracy_micro: 0.013
+
+ Training acc Top1: 0.878 
+ Many_top1: 0.013 Median_top1: 0.005 Low_top1: 0.003 
+
+Phase: val
+Epoch: [58/100] Step:     0  Minibatch_loss_performance: 12.000 Minibatch_accuracy_micro: 0.017
+Epoch: [58/100] Step:    10  Minibatch_loss_performance: 13.625 Minibatch_accuracy_micro: 0.020
+
+ Training acc Top1: 0.878 
+ Many_top1: 0.013 Median_top1: 0.006 Low_top1: 0.000 
+
+Phase: val
+Epoch: [59/100] Step:     0  Minibatch_loss_performance: 10.875 Minibatch_accuracy_micro: 0.010
+Epoch: [59/100] Step:    10  Minibatch_loss_performance: 13.625 Minibatch_accuracy_micro: 0.016
+
+ Training acc Top1: 0.002 
+ Many_top1: 0.016 Median_top1: 0.003 Low_top1: 0.000 
+
+Phase: val
+Epoch: [60/100] Step:     0  Minibatch_loss_performance: 12.250 Minibatch_accuracy_micro: 0.011
+Epoch: [60/100] Step:    10  Minibatch_loss_performance: 12.125 Minibatch_accuracy_micro: 0.015
+
+ Training acc Top1: 0.002 
+ Many_top1: 0.013 Median_top1: 0.006 Low_top1: nan 
+
+Phase: val
+Epoch: [61/100] Step:     0  Minibatch_loss_performance: 11.062 Minibatch_accuracy_micro: 0.007
+Epoch: [61/100] Step:    10  Minibatch_loss_performance: 9.562 Minibatch_accuracy_micro: 0.013
+
+ Training acc Top1: 0.002 
+ Many_top1: 0.014 Median_top1: 0.004 Low_top1: 0.000 
+
+Phase: val
+Epoch: [62/100] Step:     0  Minibatch_loss_performance: 8.875 Minibatch_accuracy_micro: 0.019
+Epoch: [62/100] Step:    10  Minibatch_loss_performance: 8.438 Minibatch_accuracy_micro: 0.015
+
+ Training acc Top1: 0.002 
+ Many_top1: 0.013 Median_top1: 0.003 Low_top1: nan 
+
+Phase: val
+Epoch: [63/100] Step:     0  Minibatch_loss_performance: 9.125 Minibatch_accuracy_micro: 0.016
+Epoch: [63/100] Step:    10  Minibatch_loss_performance: 8.312 Minibatch_accuracy_micro: 0.014
+
+ Training acc Top1: 0.017 
+ Many_top1: 0.016 Median_top1: 0.006 Low_top1: nan 
+
+Phase: val
+Epoch: [64/100] Step:     0  Minibatch_loss_performance: 8.750 Minibatch_accuracy_micro: 0.014
+Epoch: [64/100] Step:    10  Minibatch_loss_performance: 7.094 Minibatch_accuracy_micro: 0.024
+
+ Training acc Top1: 0.003 
+ Many_top1: 0.017 Median_top1: 0.005 Low_top1: nan 
+
+Phase: val
+Epoch: [65/100] Step:     0  Minibatch_loss_performance: 7.656 Minibatch_accuracy_micro: 0.015
+Epoch: [65/100] Step:    10  Minibatch_loss_performance: 6.781 Minibatch_accuracy_micro: 0.014
+
+ Training acc Top1: 0.003 
+ Many_top1: 0.016 Median_top1: 0.006 Low_top1: nan 
+
+Phase: val
+Epoch: [66/100] Step:     0  Minibatch_loss_performance: 6.812 Minibatch_accuracy_micro: 0.030
+Epoch: [66/100] Step:    10  Minibatch_loss_performance: 6.656 Minibatch_accuracy_micro: 0.023
+
+ Training acc Top1: 0.053 
+ Many_top1: 0.016 Median_top1: 0.008 Low_top1: nan 
+
+Phase: val
+Epoch: [67/100] Step:     0  Minibatch_loss_performance: 6.625 Minibatch_accuracy_micro: 0.023
+Epoch: [67/100] Step:    10  Minibatch_loss_performance: 6.406 Minibatch_accuracy_micro: 0.021
+
+ Training acc Top1: 0.880 
+ Many_top1: 0.018 Median_top1: 0.009 Low_top1: 0.003 
+
+Phase: val
+Epoch: [68/100] Step:     0  Minibatch_loss_performance: 6.469 Minibatch_accuracy_micro: 0.018
+Epoch: [68/100] Step:    10  Minibatch_loss_performance: 6.188 Minibatch_accuracy_micro: 0.018
+
+ Training acc Top1: 0.880 
+ Many_top1: 0.016 Median_top1: 0.008 Low_top1: 0.003 
+
+Phase: val
+Epoch: [69/100] Step:     0  Minibatch_loss_performance: 6.250 Minibatch_accuracy_micro: 0.029
+Epoch: [69/100] Step:    10  Minibatch_loss_performance: 6.250 Minibatch_accuracy_micro: 0.018
+
+ Training acc Top1: 0.880 
+ Many_top1: 0.017 Median_top1: 0.008 Low_top1: 0.003 
+
+Phase: val
+Epoch: [70/100] Step:     0  Minibatch_loss_performance: 6.281 Minibatch_accuracy_micro: 0.033
+Epoch: [70/100] Step:    10  Minibatch_loss_performance: 6.156 Minibatch_accuracy_micro: 0.019
+
+ Training acc Top1: 0.880 
+ Many_top1: 0.018 Median_top1: 0.009 Low_top1: 0.003 
+
+Phase: val
+Epoch: [71/100] Step:     0  Minibatch_loss_performance: 6.219 Minibatch_accuracy_micro: 0.035
+Epoch: [71/100] Step:    10  Minibatch_loss_performance: 6.156 Minibatch_accuracy_micro: 0.023
+
+ Training acc Top1: 0.880 
+ Many_top1: 0.018 Median_top1: 0.009 Low_top1: 0.003 
+
+Phase: val
+Epoch: [72/100] Step:     0  Minibatch_loss_performance: 6.188 Minibatch_accuracy_micro: 0.036
+Epoch: [72/100] Step:    10  Minibatch_loss_performance: 6.125 Minibatch_accuracy_micro: 0.023
+
+ Training acc Top1: 0.016 
+ Many_top1: 0.018 Median_top1: 0.007 Low_top1: 0.003 
+
+Phase: val
+Epoch: [73/100] Step:     0  Minibatch_loss_performance: 6.156 Minibatch_accuracy_micro: 0.037
+Epoch: [73/100] Step:    10  Minibatch_loss_performance: 6.125 Minibatch_accuracy_micro: 0.027
+
+ Training acc Top1: 0.016 
+ Many_top1: 0.018 Median_top1: 0.009 Low_top1: nan 
+
+Phase: val
+Epoch: [74/100] Step:     0  Minibatch_loss_performance: 6.156 Minibatch_accuracy_micro: 0.034
+Epoch: [74/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.027
+
+ Training acc Top1: 0.880 
+ Many_top1: 0.018 Median_top1: 0.008 Low_top1: 0.003 
+
+Phase: val
+Epoch: [75/100] Step:     0  Minibatch_loss_performance: 6.156 Minibatch_accuracy_micro: 0.035
+Epoch: [75/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.026
+
+ Training acc Top1: 0.880 
+ Many_top1: 0.019 Median_top1: 0.008 Low_top1: 0.003 
+
+Phase: val
+Epoch: [76/100] Step:     0  Minibatch_loss_performance: 6.125 Minibatch_accuracy_micro: 0.037
+Epoch: [76/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.026
+
+ Training acc Top1: 0.880 
+ Many_top1: 0.020 Median_top1: 0.009 Low_top1: 0.003 
+
+Phase: val
+Epoch: [77/100] Step:     0  Minibatch_loss_performance: 6.125 Minibatch_accuracy_micro: 0.034
+Epoch: [77/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.006 
+ Many_top1: 0.020 Median_top1: 0.007 Low_top1: 0.003 
+
+Phase: val
+Epoch: [78/100] Step:     0  Minibatch_loss_performance: 6.125 Minibatch_accuracy_micro: 0.034
+Epoch: [78/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.033
+
+ Training acc Top1: 0.006 
+ Many_top1: 0.020 Median_top1: 0.011 Low_top1: 0.000 
+
+Phase: val
+Epoch: [79/100] Step:     0  Minibatch_loss_performance: 6.125 Minibatch_accuracy_micro: 0.034
+Epoch: [79/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.031
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.021 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [80/100] Step:     0  Minibatch_loss_performance: 6.125 Minibatch_accuracy_micro: 0.034
+Epoch: [80/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.030
+
+ Training acc Top1: 0.006 
+ Many_top1: 0.022 Median_top1: 0.010 Low_top1: 0.003 
+
+Phase: val
+Epoch: [81/100] Step:     0  Minibatch_loss_performance: 6.125 Minibatch_accuracy_micro: 0.035
+Epoch: [81/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.029
+
+ Training acc Top1: 0.006 
+ Many_top1: 0.022 Median_top1: 0.011 Low_top1: 0.000 
+
+Phase: val
+Epoch: [82/100] Step:     0  Minibatch_loss_performance: 6.125 Minibatch_accuracy_micro: 0.035
+Epoch: [82/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.027
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.022 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [83/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.036
+Epoch: [83/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.030
+
+ Training acc Top1: 0.006 
+ Many_top1: 0.022 Median_top1: 0.008 Low_top1: 0.003 
+
+Phase: val
+Epoch: [84/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [84/100] Step:    10  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.006 
+ Many_top1: 0.022 Median_top1: 0.012 Low_top1: 0.000 
+
+Phase: val
+Epoch: [85/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [85/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.033
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.010 Low_top1: 0.003 
+
+Phase: val
+Epoch: [86/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [86/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.010 Low_top1: 0.003 
+
+Phase: val
+Epoch: [87/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.037
+Epoch: [87/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.010 Low_top1: 0.003 
+
+Phase: val
+Epoch: [88/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [88/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.030
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [89/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [89/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [90/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [90/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [91/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.037
+Epoch: [91/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [92/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [92/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [93/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [93/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [94/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [94/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [95/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [95/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [96/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [96/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [97/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [97/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [98/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [98/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Epoch: [99/100] Step:     0  Minibatch_loss_performance: 6.094 Minibatch_accuracy_micro: 0.038
+Epoch: [99/100] Step:    10  Minibatch_loss_performance: 6.062 Minibatch_accuracy_micro: 0.032
+
+ Training acc Top1: 0.881 
+ Many_top1: 0.023 Median_top1: 0.011 Low_top1: 0.003 
+
+Phase: val
+Best validation accuracy is 0.003 at epoch 45
+Phase: val

@@ -1,0 +1,14 @@
+Phase: train
+Do shuffle??? ---  False
+Epoch: [0/100] Step:     0  Minibatch_loss_performance: 6.906 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:    10  Minibatch_loss_performance: 91.500 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:    20  Minibatch_loss_performance: 238.000 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:    30  Minibatch_loss_performance: 342.000 Minibatch_accuracy_micro: 0.031
+Epoch: [0/100] Step:    40  Minibatch_loss_performance: 524.000 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:    50  Minibatch_loss_performance: 378.000 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:    60  Minibatch_loss_performance: 352.000 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:    70  Minibatch_loss_performance: 560.000 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:    80  Minibatch_loss_performance: 470.000 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:    90  Minibatch_loss_performance: 458.000 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:   100  Minibatch_loss_performance: 516.000 Minibatch_accuracy_micro: 0.000
+Epoch: [0/100] Step:   110  Minibatch_loss_performance: 462.000 Minibatch_accuracy_micro: 0.000
