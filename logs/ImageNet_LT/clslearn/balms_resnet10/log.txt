@@ -1,0 +1,4 @@
+Phase: train
+Do shuffle??? ---  False
+Unnormalized Sample Prob: class0=0.504, class100=0.594, class200=0.539, class300=0.512, class400=0.527, class500=0.479, class600=0.445, class700=0.479, class800=0.586, class900=0.551,
+Epoch: [1/20] Step:     0  Minibatch_loss_performance: 6.594 Minibatch_accuracy_micro: 0.000

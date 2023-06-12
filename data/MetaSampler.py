@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch.nn.functional import gumbel_softmax
 from queue import Queue
 import numpy as np
+import torch_xla.core.xla_model as xm
 
 
 def invert_sigmoid(x):
@@ -20,6 +21,7 @@ class SampleLearner(nn.Module):
         self.num_classes = num_classes
         self.init_pow = init_pow
         self.freq_path = freq_path
+        self.device = xm.xla_device()
 
         self.fc = nn.Sequential(
             nn.Linear(num_classes, 1, bias=False),
@@ -66,6 +68,7 @@ class SampleLearner(nn.Module):
 
 class MetaSampler(Sampler):
     def __init__(self, data_source, batch_size, meta_learner):
+        self.device = xm.xla_device()
         num_classes = len(np.unique(data_source.labels))
         cls_data_list = [list() for _ in range(num_classes)]
         for i, label in enumerate(data_source.labels):

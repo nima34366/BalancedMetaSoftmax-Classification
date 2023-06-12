@@ -43,15 +43,15 @@ networks:
 shuffle: false
 training_opt:
   backbone: resnet10
-  batch_size: 1024
+  batch_size: 512
   dataset: ImageNet_LT
   display_step: 10
   feature_dim: 512
   log_dir: ./logs/ImageNet_LT/clslearn/softmax_resnet10_cbs
   log_root: ./logs/ImageNet_LT
   num_classes: 1000
-  num_epochs: 50
-  num_workers: 64
+  num_epochs: 120
+  num_workers: 12
   open_threshold: 0.1
   sampler: null
   scheduler_params:

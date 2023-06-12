@@ -350,7 +350,6 @@ class model ():
 
             para_loader = pl.ParallelLoader(self.data['train'], [self.device])
             for step, (inputs, labels, indexes) in enumerate(para_loader.per_device_loader(self.device)):
-                xm.master_print(1)
                 # Break when step equal to epoch step
                 if step == self.epoch_steps:
                     break
@@ -424,7 +423,6 @@ class model ():
                         inlist.append(labels.cpu().numpy())
                     self.data['train'].sampler.update_weights(*inlist)
                     # self.data['train'].sampler.update_weights(indexes.cpu().numpy(), ws)
-                xm.master_print(5)
 
             if hasattr(self.data['train'].sampler, 'get_weights'):
                 self.logger.log_ws(epoch, self.data['train'].sampler.get_weights())

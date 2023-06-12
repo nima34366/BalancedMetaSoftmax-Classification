@@ -14,7 +14,7 @@ All rights reserved.
 
 import os
 os.environ['XRT_TPU_CONFIG'] = "localservice;0;localhost:51011"
-os.environ['XLA_USE_BF16']                 = '1'
+os.environ['XLA_USE_BF16']                 = '0'
 
 import argparse
 import pprint

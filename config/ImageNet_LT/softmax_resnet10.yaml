@@ -8,7 +8,7 @@ criterions:
 endlr: 0.0
 last: false
 memory: {centroids: false, init_centroids: false}
-model_dir: ./logs/ImageNet_LT/models/resnet10_uniform_e90
+model_dir: null
 networks:
   classifier:
     def_file: ./models/DotProductClassifier.py
@@ -31,7 +31,7 @@ training_opt:
   log_dir: ./logs/ImageNet_LT/clslearn/softmax_resnet10_cbs
   log_root: ./logs/ImageNet_LT
   num_classes: 1000
-  num_epochs: 100
+  num_epochs: 120
   num_workers: 12
   open_threshold: 0.1
   sampler: null
